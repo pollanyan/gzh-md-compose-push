@@ -477,8 +477,14 @@ def _focus_body(pg):
         pg.wait_for_timeout(600)
 
 
+# macOS 的编辑快捷键是 Cmd（Meta），Windows/Linux 是 Ctrl——2026-11-25 首次
+# 真实推送时发现：在 mac 上发 Control+V 不触发粘贴（注入只得到 10 字符）、
+# Control+A 也不全选，必须按平台选修饰键。
+MOD = "Meta" if sys.platform == "darwin" else "Control"
+
+
 def _clear_body(pg):
-    pg.keyboard.press("Control+A")
+    pg.keyboard.press(MOD + "+A")
     pg.keyboard.press("Delete")
     pg.wait_for_timeout(500)
 
@@ -494,7 +500,7 @@ def paste_body(pg, html, want_imgs=0):
         r = set_clipboard_html(pg, html, plain)
         if str(r).startswith("err:"):
             log("!! 剪贴板被拒（缺 clipboard 权限？）: %s" % r)
-        pg.keyboard.press("Control+V")
+        pg.keyboard.press(MOD + "+V")
         pg.wait_for_timeout(2000)
         hit = wait_and_dismiss(pg, ("继续插入",))
         log("结构检测弹窗 -> %s" % hit)
@@ -526,7 +532,7 @@ def set_title(pg, title):
         pg.evaluate("(s)=>{const e=document.querySelector(s);if(e)e.focus();}", TITLE_SEL)
         pg.wait_for_timeout(400)
     # 先清空已有标题，避免重复追加
-    pg.keyboard.press("Control+A")
+    pg.keyboard.press(MOD + "+A")
     pg.keyboard.press("Delete")
     pg.wait_for_timeout(400)
     pg.keyboard.type(title, delay=8)

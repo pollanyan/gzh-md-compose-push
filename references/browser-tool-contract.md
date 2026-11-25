@@ -49,14 +49,14 @@
 
 ### 3. 填标题 / 署名 / 摘要
 
-- 标题：`.title-editor__input .ProseMirror`，先点击取得焦点 → `Control+A` → `Delete` → 输入标题（≤64 字）→ 回读前 6 字校验。
+- 标题：`.title-editor__input .ProseMirror`，先点击取得焦点 → `Cmd+A`（macOS）/ `Control+A`（其他）→ `Delete` → 输入标题（≤64 字）→ 回读前 6 字校验。
 - 署名：`input#author`；摘要：`textarea#js_description`（≤120 字）。
 
 ### 4. 写正文（关键，唯一可靠路径）
 
 正文编辑器是 `.mock-iframe-body .ProseMirror`（2026 版**无 iframe**）。必须按顺序：
 
-1. 真实点击编辑器取得焦点，再 `Control+A` → `Delete` 清空；
+1. 真实点击编辑器取得焦点，再 `Cmd+A`（macOS）/ `Control+A`（其他）→ `Delete` 清空；
 2. 执行 JS 写剪贴板（同时写 `text/html` 和 `text/plain`）：
 
    ```js
@@ -69,7 +69,7 @@
    }
    ```
 
-3. 发 `Control+V`；
+3. 发 `Cmd+V`（macOS）/ `Control+V`（其他平台）——修饰键必须按平台选，mac 上 Ctrl+V 不触发粘贴（2026-11-25 实测）；
 4. 轮询最多 8 秒，若出现「内容结构检测」弹窗（`.weui-desktop-dialog`），点「继续插入」——不点内容会被静默丢弃；
 5. 读 `.mock-iframe-body` 的 `innerText.length`，按 HTML 预期非空白字符数的 0.7 倍作下限（下限最小 20）；不达标则清空重试一次。
 
@@ -115,9 +115,9 @@ Agent 在运行时先探测宿主暴露的是 MCP 工具还是 shell 命令，�
 单元 3 读标题          → MCP: evaluate_script("(s)=>document.querySelector(s)?.innerText", selector)
                          CLI: chrome-devtools evaluate_script "(s)=>..." --args <uid>
 单元 4 写剪贴板 + 粘贴  → MCP: evaluate_script(写 ClipboardItem 的 JS, {html, plain})
-                         → MCP: press_key("Control+V")；再 evaluate_script 轮询「继续插入」
+                         → MCP: press_key("Meta+V"（macOS）/"Control+V"）；再 evaluate_script 轮询「继续插入」
                          CLI: chrome-devtools evaluate_script "<JS>" --pageId <id>
-                              chrome-devtools press_key <id> "Control+V"
+                              chrome-devtools press_key <id> "Meta+V"  # macOS；Windows/Linux 用 Control+V
 单元 7 设封面上传       → MCP: upload_file(uid, path) / 点击图片库条目
                          CLI: chrome-devtools upload_file <id> <uid> "<path>"
 单元 8 核验             → MCP: evaluate_script(读标题/正文长度/真图数/封面背景)

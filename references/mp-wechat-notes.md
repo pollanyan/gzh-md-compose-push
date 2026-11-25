@@ -15,7 +15,7 @@
 ## 编辑器 DOM（2026 版）
 
 - 没有 iframe（老教程 `#ueditor_0` 已废弃）。正文 `.mock-iframe-body .ProseMirror`；标题 `.title-editor__input .ProseMirror`；署名 `input#author`；摘要 `textarea#js_description`。
-- 填 HTML 唯一可靠路径：真实点击聚焦 → `ctx.grant_permissions(['clipboard-read','clipboard-write'], origin='https://mp.weixin.qq.com')` → `navigator.clipboard.write` 写 `text/html` → `Control+V`。
+- 填 HTML 唯一可靠路径：真实点击聚焦 → `ctx.grant_permissions(['clipboard-read','clipboard-write'], origin='https://mp.weixin.qq.com')` → `navigator.clipboard.write` 写 `text/html` → `Cmd+V`（macOS）/ `Control+V`（Windows/Linux）。修饰键必须按平台选——2026-11-25 实测 mac 上 Control+V 不触发粘贴（注入只剩 10 字符），Control+A 也不全选。
   无效做法：合成 `ClipboardEvent('paste')`、`document.execCommand('insertHTML')`、直接改 `innerHTML`。
 - 粘贴后可能弹「内容结构检测」，必须点「继续插入」，否则内容被静默丢弃（不是每次都弹，轮询 8 秒）。
 - 结构检测两条硬规则：文字背景禁渐变（CTA 用纯色）；`line-height` 不能小于 `font-size`（19px→1.45、17px→1.55、14/13px→1.6）。
