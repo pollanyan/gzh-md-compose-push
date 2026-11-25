@@ -249,12 +249,22 @@ IMG_LINE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)\s*$")
 
 
 def _text_width(s):
-    """显示宽度：CJK/全角 = 2，ASCII = 1（忽略行内代码反引号）。"""
-    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
-               for ch in s.replace("`", ""))
+    """显示宽度：CJK/全角 = 2，emoji（非 BMP 字符，如 🟢🔴）= 3（实测字形
+    宽约 1.3 倍字号，按 3 估才不会把状态列挤到换行），变体选择符/零宽连接符
+    = 0，ASCII = 1（忽略行内代码反引号与加粗标记）。"""
+    w = 0
+    for ch in s.replace("`", "").replace("**", ""):
+        o = ord(ch)
+        if o in (0xFE0F, 0x200D):
+            continue
+        if o > 0xFFFF:
+            w += 3
+        else:
+            w += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return w
 
 
-def auto_col_widths(rows, ncol):
+def auto_col_widths(rows, ncol, status_col=None):
     """按内容自动分配列宽（百分比列表，和为 100）。
 
     依据（用户约定「表格列宽按内容适配」）：
@@ -262,13 +272,16 @@ def auto_col_widths(rows, ncol):
         长文列宽、短文列窄，单行超长不至于独占；
       - 不可断片段（空格/连字符/顿号等分隔符之间的 ASCII 连续串，
         如 @narumitw/pi-goal）+ 内边距作保底，避免词中折行；
+      - status_col（状态列）单元格渲染时 white-space:nowrap 强制单行，
+        保底必须按**整格最大宽 + 内边距**算（2026-11-25 手机实测
+        「🟢 强」在 8% 列宽下竖排换行）；
       - 夹在 8%–60% 后重归一，防止单列过窄或独占。
     """
     maxw, tokw, avg = [0] * ncol, [0] * ncol, [0.0] * ncol
     for ri, r in enumerate(rows):
         cells = (r + [""] * ncol)[:ncol]
         for ci, c in enumerate(cells):
-            plain = c.replace("`", "")
+            plain = c.replace("`", "").replace("**", "")
             w = _text_width(plain)
             if w > maxw[ci]:
                 maxw[ci] = w
@@ -282,7 +295,8 @@ def auto_col_widths(rows, ncol):
     weights = []
     for ci in range(ncol):
         w = 0.55 * maxw[ci] + 0.45 * (avg[ci] / body_n)
-        w = max(w, tokw[ci] + 4, 6.0)   # +4 ≈ 单元格水平内边距的宽度当量
+        floor = (maxw[ci] + 8) if ci == status_col else (tokw[ci] + 5)
+        w = max(w, floor, 6.0)
         weights.append(w)
     pct = [x / sum(weights) * 100 for x in weights]
     pct = [min(max(p, 8), 60) for p in pct]
@@ -301,7 +315,7 @@ def data_table(rows, t, col_widths=None, status_col=None):
     header, body = rows[0], rows[1:]
     ncol = len(header)
     if col_widths is None and ncol >= 2:
-        col_widths = auto_col_widths(rows, ncol)
+        col_widths = auto_col_widths(rows, ncol, status_col=status_col)
     out = ['<section style="margin:0 10px 24px;overflow-x:auto;">',
            '<table style="width:100%%;min-width:%dpx;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">'
            % (640 if ncol <= 2 else 650)]
@@ -326,8 +340,11 @@ def data_table(rows, t, col_widths=None, status_col=None):
             cell = inline(c, t)
             if status_col is not None and ci == status_col:
                 cell = '<span style="font-weight:800;color:%s;">%s</span>' % (t["ink"], leaf(esc(c)))
-            tds.append('<td%s style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s">%s</td>'
-                       % (cwid(ci), t["line"], t["body"], wstyle(ci), cell))
+            # 状态列内容短（🟢 强 等）且必须单行：white-space:nowrap 兜底防换行；
+            # 其余内容列保持可换行
+            nowrap = "white-space:nowrap;" if ci == status_col else ""
+            tds.append('<td%s style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s%s">%s</td>'
+                       % (cwid(ci), t["line"], t["body"], nowrap, wstyle(ci), cell))
         out.append("<tr>" + "".join(tds) + "</tr>")
     out.append("</table></section>")
     return "".join(out)
