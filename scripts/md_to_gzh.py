@@ -223,12 +223,13 @@ def h3(title, t):
 
 
 def quote_block(text, t, label=None):
-    """引用段：竖线 + 加粗正文。不加任何装饰性英文标签（2026-11-25 用户定稿，
-    「QUOTE」字样影响阅读）；文字必须显式 text-align:left——微信手机端对
-    未指定的段落默认两端对齐，PC 浏览器默认左对齐，不写死会三端不一致。"""
+    """引用段：竖线 + 加粗正文。不加任何装饰性英文标签（2026-11-25 用户定稿）；
+    正文走 inline() 行内解析（**加粗**/`行内代码`/角标都要生效，此前只 esc
+    导致 **31** 这类标记原样输出）；text-align 显式 left——微信手机端对未指定
+    段落默认两端对齐，PC 浏览器默认左对齐，不写死三端不一致。"""
     return ('<section style="border-left:3px solid %s;padding:16px 0 16px 24px;margin:0 10px 28px;">'
             '<p style="font-size:16px;font-weight:700;color:%s;margin:0;line-height:1.7;text-align:left;">%s</p>'
-            '</section>' % (t["primary"], t["ink"], leaf(esc(text))))
+            '</section>' % (t["primary"], t["ink"], inline(text, t)))
 
 
 def image_block(src, alt, t):
@@ -306,13 +307,18 @@ def data_table(rows, t, col_widths=None, status_col=None):
            % (640 if ncol <= 2 else 650)]
     if col_widths and len(col_widths) == ncol:
         out.append('<colgroup>' + "".join('<col style="width:%d%%;">' % w for w in col_widths) + '</colgroup>')
-    # 列宽同时写在 colgroup（浏览器用）与每个 th/td 的内联样式上（微信编辑器
-    # 会剥离 colgroup——2026-11-25 手机实测列宽失效平分，三端一致必须写在
-    # 单元格上）。微信保留单元格内联样式。
+    # 列宽三保险（2026-11-25 手机实测：微信 ProseMirror 编辑器按自家 schema
+    # 重建表格，colgroup 与 style 里的 width 都被剥离 → 平分列宽）：
+    # ① data-colwidth（px，prosemirror-tables 的列宽正式通道，编辑器会保留
+    #    并在序列化时还原成单元格宽度）；② 每个 th/td 内联 style width；
+    # ③ colgroup（浏览器直接打开 HTML 时用）。
+    tbl_px = 640
+    cwid = lambda ci: (' data-colwidth="%d"' % int(round(col_widths[ci] / 100.0 * tbl_px))) \
+        if (col_widths and len(col_widths) == ncol) else ""
     wstyle = lambda ci: ("width:%d%%;" % col_widths[ci]) if (col_widths and len(col_widths) == ncol) else ""
     out.append("<tr>" + "".join(
-        '<th style="text-align:center;padding:9px 12px;border:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;%s">%s</th>'
-        % (t["line"], t["primary"], t["ink"], wstyle(ci), leaf(esc(c))) for ci, c in enumerate(header)) + "</tr>")
+        '<th%s style="text-align:center;padding:9px 12px;border:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;%s">%s</th>'
+        % (cwid(ci), t["line"], t["primary"], t["ink"], wstyle(ci), leaf(esc(c))) for ci, c in enumerate(header)) + "</tr>")
     for r in body:
         cells = (r + [""] * ncol)[:ncol]
         tds = []
@@ -320,8 +326,8 @@ def data_table(rows, t, col_widths=None, status_col=None):
             cell = inline(c, t)
             if status_col is not None and ci == status_col:
                 cell = '<span style="font-weight:800;color:%s;">%s</span>' % (t["ink"], leaf(esc(c)))
-            tds.append('<td style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s">%s</td>'
-                       % (t["line"], t["body"], wstyle(ci), cell))
+            tds.append('<td%s style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s">%s</td>'
+                       % (cwid(ci), t["line"], t["body"], wstyle(ci), cell))
         out.append("<tr>" + "".join(tds) + "</tr>")
     out.append("</table></section>")
     return "".join(out)
