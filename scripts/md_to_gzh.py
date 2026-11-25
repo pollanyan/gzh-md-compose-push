@@ -222,11 +222,13 @@ def h3(title, t):
             % (t["ink"], t["primary"], leaf(esc(title))))
 
 
-def quote_block(text, t, label="QUOTE"):
+def quote_block(text, t, label=None):
+    """引用段：竖线 + 加粗正文。不加任何装饰性英文标签（2026-11-25 用户定稿，
+    「QUOTE」字样影响阅读）；文字必须显式 text-align:left——微信手机端对
+    未指定的段落默认两端对齐，PC 浏览器默认左对齐，不写死会三端不一致。"""
     return ('<section style="border-left:3px solid %s;padding:16px 0 16px 24px;margin:0 10px 28px;">'
-            '<p style="font-size:11px;color:%s;letter-spacing:2px;margin:0 0 10px;">%s</p>'
-            '<p style="font-size:16px;font-weight:700;color:%s;margin:0;line-height:1.7;">%s</p>'
-            '</section>' % (t["primary"], t["muted"], leaf(label), t["ink"], leaf(esc(text))))
+            '<p style="font-size:16px;font-weight:700;color:%s;margin:0;line-height:1.7;text-align:left;">%s</p>'
+            '</section>' % (t["primary"], t["ink"], leaf(esc(text))))
 
 
 def image_block(src, alt, t):
@@ -304,9 +306,13 @@ def data_table(rows, t, col_widths=None, status_col=None):
            % (640 if ncol <= 2 else 650)]
     if col_widths and len(col_widths) == ncol:
         out.append('<colgroup>' + "".join('<col style="width:%d%%;">' % w for w in col_widths) + '</colgroup>')
+    # 列宽同时写在 colgroup（浏览器用）与每个 th/td 的内联样式上（微信编辑器
+    # 会剥离 colgroup——2026-11-25 手机实测列宽失效平分，三端一致必须写在
+    # 单元格上）。微信保留单元格内联样式。
+    wstyle = lambda ci: ("width:%d%%;" % col_widths[ci]) if (col_widths and len(col_widths) == ncol) else ""
     out.append("<tr>" + "".join(
-        '<th style="text-align:center;padding:9px 12px;border:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;">%s</th>'
-        % (t["line"], t["primary"], t["ink"], leaf(esc(c))) for c in header) + "</tr>")
+        '<th style="text-align:center;padding:9px 12px;border:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;%s">%s</th>'
+        % (t["line"], t["primary"], t["ink"], wstyle(ci), leaf(esc(c))) for ci, c in enumerate(header)) + "</tr>")
     for r in body:
         cells = (r + [""] * ncol)[:ncol]
         tds = []
@@ -314,8 +320,8 @@ def data_table(rows, t, col_widths=None, status_col=None):
             cell = inline(c, t)
             if status_col is not None and ci == status_col:
                 cell = '<span style="font-weight:800;color:%s;">%s</span>' % (t["ink"], leaf(esc(c)))
-            tds.append('<td style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;">%s</td>'
-                       % (t["line"], t["body"], cell))
+            tds.append('<td style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s">%s</td>'
+                       % (t["line"], t["body"], wstyle(ci), cell))
         out.append("<tr>" + "".join(tds) + "</tr>")
     out.append("</table></section>")
     return "".join(out)

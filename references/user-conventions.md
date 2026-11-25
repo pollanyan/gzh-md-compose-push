@@ -30,7 +30,8 @@
   不可断片段如 `@narumitw/pi-goal` + 内边距作保底，夹在 8%–60%）；
   显式传 `col_widths` 可覆盖。**禁止无 colgroup 的平均分列**。
 - **不要**把所有列都拉宽到 900/1100/1280px——用户明确批评过「无脑增宽」，电脑端要按内容可读。
-- 单元格**全边框**（`border:1px solid 线色`，含竖线网格，border-collapse:collapse）；
+- 列宽写在**每个 th/td 内联样式**上（微信剥离 colgroup，仅 colgroup 三端不一致）
+  + colgroup（浏览器）；单元格**全边框**（`border:1px solid 线色`，含竖线网格，border-collapse:collapse）；
   表头**居中对齐**、加粗、下边框主题色 2px；正文单元格左对齐。
   （2026-11-25 用户定稿：旧「表头左对齐、只有横线」口径作废。）
 
