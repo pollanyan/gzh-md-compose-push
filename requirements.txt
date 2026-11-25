@@ -1,0 +1,11 @@
+# 公众号草稿箱推送 —— 可选运行依赖
+#
+# 大多数情况无需任何依赖：
+#   * 排版 md_to_gzh.py / 校验 validate_gzh_html.py / 预览 wrap_preview.py —— 纯标准库；
+#   * API 可选通道 wx_api_publish.py —— 纯标准库。
+#
+# 只有「浏览器扫码通道」的 mp_*.py 需要 patchright（Playwright stealth 驱动库，几 MB）。
+# 依赖按需触发：运行 mp_*.py 时若缺失，脚本会提示 python3 -m pip install patchright。
+# 浏览器内核由 find_chrome() 自动探测系统已装的 Chrome/Edge/Chromium，无需手工配置 MP_CHROME，
+# 也无需预下载 Chromium；极少数机器才需 python3 -m patchright install chromium。
+patchright
