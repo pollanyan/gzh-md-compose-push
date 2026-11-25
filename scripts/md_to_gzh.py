@@ -264,19 +264,15 @@ def _text_width(s):
     return w
 
 
-def auto_col_widths(rows, ncol, status_col=None):
-    """按内容自动分配列宽（百分比列表，和为 100）。
+# 单行列阈值：列内最长单元格显示宽 ≤ 此值（单位：ASCII=1/CJK=2/emoji=3）
+# 时，整列按「内容必然单行」处理——td 加 white-space:nowrap、列宽按
+# 整格最大宽 + 8 保底。按内容特征判定，与表头叫什么无关（2026-11-25
+# 由「状态列」特例泛化而来：状态/评级/短枚举列都自动覆盖）。
+SINGLE_LINE_MAX = 12
 
-    依据（用户约定「表格列宽按内容适配」）：
-      - 权重 = 0.55×列最大显示宽 + 0.45×列平均显示宽（正文行），
-        长文列宽、短文列窄，单行超长不至于独占；
-      - 不可断片段（空格/连字符/顿号等分隔符之间的 ASCII 连续串，
-        如 @narumitw/pi-goal）+ 内边距作保底，避免词中折行；
-      - status_col（状态列）单元格渲染时 white-space:nowrap 强制单行，
-        保底必须按**整格最大宽 + 内边距**算（2026-11-25 手机实测
-        「🟢 强」在 8% 列宽下竖排换行）；
-      - 夹在 8%–60% 后重归一，防止单列过窄或独占。
-    """
+
+def _col_stats(rows, ncol):
+    """每列的 (最大显示宽, 最长不可断片段, 正文平均宽)。"""
     maxw, tokw, avg = [0] * ncol, [0] * ncol, [0.0] * ncol
     for ri, r in enumerate(rows):
         cells = (r + [""] * ncol)[:ncol]
@@ -291,11 +287,37 @@ def auto_col_widths(rows, ncol, status_col=None):
                 pw = _text_width(piece)
                 if pw > tokw[ci]:
                     tokw[ci] = pw
+    return maxw, tokw, avg
+
+
+def single_line_cols(rows, ncol):
+    """按内容判定「整列单行」的列号集合：最长单元格都放得下，就该 nowrap
+    并按整格保底列宽——不依赖表头名称。"""
+    maxw = _col_stats(rows, ncol)[0]
+    return {ci for ci in range(ncol) if maxw[ci] <= SINGLE_LINE_MAX}
+
+
+def auto_col_widths(rows, ncol, single=None):
+    """按内容自动分配列宽（百分比列表，和为 100）。
+
+    依据（用户约定「表格列宽按内容适配」）：
+      - 权重 = 0.55×列最大显示宽 + 0.45×列平均显示宽（正文行），
+        长文列宽、短文列窄，单行超长不至于独占；
+      - 不可断片段（空格/连字符/顿号等分隔符之间的 ASCII 连续串，
+        如 @narumitw/pi-goal）+ 内边距作保底，避免词中折行；
+      - single（单行列，见 single_line_cols）单元格渲染时 white-space:nowrap
+        强制单行，保底按**整格最大宽 + 8** 算（2026-11-25 手机实测
+        「🟢 强」在 8% 列宽下竖排换行）；
+      - 夹在 8%–60% 后重归一，防止单列过窄或独占。
+    """
+    maxw, tokw, avg = _col_stats(rows, ncol)
+    if single is None:
+        single = single_line_cols(rows, ncol)
     body_n = max(1, len(rows) - 1)
     weights = []
     for ci in range(ncol):
         w = 0.55 * maxw[ci] + 0.45 * (avg[ci] / body_n)
-        floor = (maxw[ci] + 8) if ci == status_col else (tokw[ci] + 5)
+        floor = (maxw[ci] + 8) if ci in single else (tokw[ci] + 5)
         w = max(w, floor, 6.0)
         weights.append(w)
     pct = [x / sum(weights) * 100 for x in weights]
@@ -315,7 +337,8 @@ def data_table(rows, t, col_widths=None, status_col=None):
     header, body = rows[0], rows[1:]
     ncol = len(header)
     if col_widths is None and ncol >= 2:
-        col_widths = auto_col_widths(rows, ncol, status_col=status_col)
+        single = single_line_cols(rows, ncol)
+        col_widths = auto_col_widths(rows, ncol, single=single)
     out = ['<section style="margin:0 10px 24px;overflow-x:auto;">',
            '<table style="width:100%%;min-width:%dpx;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">'
            % (640 if ncol <= 2 else 650)]
@@ -342,7 +365,7 @@ def data_table(rows, t, col_widths=None, status_col=None):
                 cell = '<span style="font-weight:800;color:%s;">%s</span>' % (t["ink"], leaf(esc(c)))
             # 状态列内容短（🟢 强 等）且必须单行：white-space:nowrap 兜底防换行；
             # 其余内容列保持可换行
-            nowrap = "white-space:nowrap;" if ci == status_col else ""
+            nowrap = "white-space:nowrap;" if ci in single else ""
             tds.append('<td%s style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s%s">%s</td>'
                        % (cwid(ci), t["line"], t["body"], nowrap, wstyle(ci), cell))
         out.append("<tr>" + "".join(tds) + "</tr>")
