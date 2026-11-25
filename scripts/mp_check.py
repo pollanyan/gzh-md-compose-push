@@ -103,7 +103,17 @@ def main():
     checks = []
     checks.append(("标题非空", bool(out["title"]) and out["title"] != "(no title el)"))
     checks.append(("标题≤64字", len(out["title"]) <= 64))
-    checks.append(("署名已填", bool(out["author"])))
+    # 署名以配置项 author（scripts/push_config.py 管理）为预期值：
+    # 配置非空 → 草稿署名须一致；配置为空（默认留空）→ 草稿为空即 PASS。
+    try:
+        import push_config
+        _expect_author = push_config.load()["author"]
+    except Exception:
+        _expect_author = ""
+    if _expect_author:
+        checks.append(("署名与配置一致(%s)" % _expect_author, out["author"] == _expect_author))
+    else:
+        checks.append(("署名留空(默认)", out["author"] == ""))
     checks.append(("摘要已填", bool(out["digest"])))
     # 不写死 200 字下限：短文是合法的，长度该由调用方判断。
     # 给了「预期图片张数」时，正文有图就说明注入成功；纯文字文章则只看非空。

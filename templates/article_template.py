@@ -16,7 +16,21 @@ import os
 
 TITLE = "在这里写标题（≤64 字符）"
 DIGEST = "在这里写摘要，留空则由正文开头自动抓取"
-AUTHOR = "署名"
+
+# 署名：默认从用户配置自动读取（配置项 author，见 scripts/push_config.py）。
+# 优先级：本文件显式改这一行 > 配置文件 > 默认空字符串（署名留空）。
+def _load_author():
+    import json as _json
+    _p = os.environ.get(
+        "GZH_PUSH_CONFIG",
+        os.path.expanduser("~/.config/gzh-md-compose-push/config.json"))
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            return (_json.load(_f).get("author") or "").strip()
+    except (OSError, ValueError):
+        return ""
+
+AUTHOR = _load_author()
 
 _IMGLIB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imglib_urls.json")
 

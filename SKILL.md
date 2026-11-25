@@ -47,6 +47,7 @@ scripts/
   mp_imglib_upload.py     # 正文配图上传到微信图床
   mp_cover_set.py         # 单独设置/更换封面
   cover_prepare.py        # 封面归一化：本地路径/URL/AI 生成图 → 900×383
+  push_config.py          # 用户配置项（author 署名等）：get/set/path，持久化到 ~/.config/gzh-md-compose-push/config.json
 templates/
   article_template.py     # 文章模块模板（TITLE/DIGEST/AUTHOR/build_content）
 assets/
@@ -96,6 +97,11 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
    - **② AI 自动生成封面**：按文章主题与所选配色生成提示词（无文字、构图主体居中、用主题强调色作点缀），调用图像生成能力产出后**必须**用 `cover_prepare.py` 归一化——生成图右下角的「AI生成」水印在底边，中心裁剪 2.35:1 后必然被去掉。**图像生成消耗额外额度（约 5–10 积分/张），询问前告知用户**；用户不满意可换构图重新生成。
    - **③ 不加封面**：草稿封面留空，后续可在公众号后台单独补。
 
+   **同一轮提问里还要收集署名**：先跑 `push_config.py get author` 读已有配置——
+   - 有值：把它作为默认展示，用户可直接确认或修改；
+   - 无值：请用户输入（可跳过留空）。
+   用户提交后**立即** `push_config.py set author "<署名>"` 持久化，并告知「下次推送自动使用，随时可改」；用户跳过则配置保持不变（回退默认 = 署名留空）。文章模块的 `AUTHOR` 由模板自动从配置读取，无需手填。
+
    选 ①② 时封面文件在确认推送前准备好，推送时直接使用；选 ③ 则推送时不带 `--cover`。
 5. **停下等用户确认**。未确认前不生成最终文件。
 
@@ -129,7 +135,7 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
    python3 <SKILL>/scripts/mp_full.py login
    ```
    脚本产出 `scripts/mp-login-qrcode-big.png`（放大版）——用 present_files 给用户扫。等 900 秒，登录成功自动返回并删除二维码文件。
-3. **准备文章模块**：复制 `templates/article_template.py` 到工作区，填 `TITLE`（≤64 字）、`DIGEST`（≤120 字）、`AUTHOR`，`build_content()` 返回第 2 步的 HTML 文件内容：
+3. **准备文章模块**：复制 `templates/article_template.py` 到工作区，填 `TITLE`（≤64 字）、`DIGEST`（≤120 字）；`AUTHOR` **不用手填**——模板自动读配置项 `author`（第 1 步收集并持久化），模块里显式改那一行可临时覆盖；`build_content()` 返回第 2 步的 HTML 文件内容：
    ```python
    TITLE = "文章标题"; DIGEST = "摘要"; AUTHOR = ""
    def build_content():
