@@ -100,12 +100,12 @@
 > 请帮我安装一个 Agent Skill。
 >
 > 名称：gzh-md-compose-push
-> 来源：REPO_URL（本仓库的 GitHub 地址，例如 https://github.com/OWNER/gzh-md-compose-push；也可以是我上传的 zip 文件或 SKILL.md 内容）
+> 来源：https://github.com/pollanyan/gzh-md-compose-push（也可以是我上传的 zip 文件或 SKILL.md 内容）
 >
 > 要求：
 >
 > 1. 先做安全审查：读一遍 `SKILL.md` 和 `scripts/` 里的脚本，说明它做什么、会不会动我的文件或隐私（尤其是公众号登录态目录 `scripts/mp_profile/`），值不值得装。
-> 2. 优先用 skills CLI 安装：`npx -y skills@latest add REPO_URL --skill gzh-md-compose-push -a HOST -g -y`（`HOST` 换成你的宿主名，如 `claude-code` / `codex` / `cursor`）；如果本平台不在 skills CLI 支持列表（例如 WorkBuddy、DeepSeek Harness），就 `git clone` 仓库，把仓库根目录放到本平台的用户级 skills 目录，目录名必须是 `gzh-md-compose-push`（与 `SKILL.md` 里的 `name` 一致），保留 `SKILL.md` / `scripts` / `references` / `templates` / `assets` / `doc` 的完整结构，不要改技能内部文件。
+> 2. 优先用 skills CLI 安装：`npx -y skills@latest add https://github.com/pollanyan/gzh-md-compose-push --skill gzh-md-compose-push -a HOST -g -y`（`HOST` 换成你的宿主名，如 `claude-code` / `codex` / `cursor`）；如果本平台不在 skills CLI 支持列表（例如 WorkBuddy、DeepSeek Harness），就 `git clone` 仓库，把仓库根目录放到本平台的用户级 skills 目录，目录名必须是 `gzh-md-compose-push`（与 `SKILL.md` 里的 `name` 一致），保留 `SKILL.md` / `scripts` / `references` / `templates` / `assets` / `doc` 的完整结构，不要改技能内部文件。
 > 3. 安装后验证：确认目录名与 frontmatter 一致；CLI 安装时再跑 `npx skills list -g`，列表里应出现 `gzh-md-compose-push`；最后读一遍 `SKILL.md`，说出它会怎么把一篇 Markdown 推到公众号草稿箱。
 > 4. 告诉我安装路径、在本平台如何触发，以及纯排版 / 扫码 / 接口三条路径各自需要什么。
 
@@ -118,11 +118,11 @@
 前置条件：Node.js 22.20+。仓库根目录本身就是技能（含 `SKILL.md`），CLI 能直接识别。
 
 ```bash
-# 先看仓库里有哪些 skill（把 REPO_URL 换成实际 GitHub 地址）
-npx -y skills@latest add REPO_URL --list
+# 先看仓库里有哪些 skill
+npx -y skills@latest add https://github.com/pollanyan/gzh-md-compose-push --list
 
 # 安装到全局（所有项目可用），装给 Claude Code 与 OpenCode
-npx -y skills@latest add REPO_URL --skill gzh-md-compose-push -a claude-code -a opencode -g -y
+npx -y skills@latest add https://github.com/pollanyan/gzh-md-compose-push --skill gzh-md-compose-push -a claude-code -a opencode -g -y
 
 # 只想装给一个 Agent，把 -a 换成对应名字，例如 -a codex
 # 复制文件而不是软链：加 --copy
@@ -135,8 +135,8 @@ npx -y skills@latest add REPO_URL --skill gzh-md-compose-push -a claude-code -a 
 `npx skills` 的 agent 列表目前没有 WorkBuddy 与 DeepSeek Harness，用 `git clone` 直接放到用户级 skills 目录：
 
 ```bash
-# WorkBuddy：用户级，所有项目可用（把 OWNER 换成实际账号）
-git clone https://github.com/OWNER/gzh-md-compose-push.git ~/.workbuddy/skills/gzh-md-compose-push
+# WorkBuddy：用户级，所有项目可用
+git clone https://github.com/pollanyan/gzh-md-compose-push.git ~/.workbuddy/skills/gzh-md-compose-push
 
 # 项目级：把目标目录换成 <项目目录>/.workbuddy/skills/gzh-md-compose-push
 # DeepSeek Harness：换成 ~/.dsh/skills/gzh-md-compose-push
