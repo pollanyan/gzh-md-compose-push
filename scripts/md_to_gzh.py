@@ -340,8 +340,10 @@ def data_table(rows, t, col_widths=None, status_col=None):
         single = single_line_cols(rows, ncol)
         col_widths = auto_col_widths(rows, ncol, single=single)
     out = ['<section style="margin:0 10px 24px;overflow-x:auto;">',
-           '<table style="width:100%%;min-width:%dpx;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">'
-           % (640 if ncol <= 2 else 650)]
+           # 不写死 min-width：微信会把表格宽度固化成 min-width 值，手机上
+           # 640px 表格超出 375px 屏 → 首列占比过高（2026-11-25 手机实测）。
+           # 表格宽度按容器自适应，列宽用 width="%" 属性（微信保留且随屏缩放）。
+           '<table style="width:100%%;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">']
     if col_widths and len(col_widths) == ncol:
         out.append('<colgroup>' + "".join('<col style="width:%d%%;">' % w for w in col_widths) + '</colgroup>')
     # 列宽三保险（2026-11-25 手机实测：微信 ProseMirror 编辑器按自家 schema
@@ -349,13 +351,22 @@ def data_table(rows, t, col_widths=None, status_col=None):
     # ① data-colwidth（px，prosemirror-tables 的列宽正式通道，编辑器会保留
     #    并在序列化时还原成单元格宽度）；② 每个 th/td 内联 style width；
     # ③ colgroup（浏览器直接打开 HTML 时用）。
-    tbl_px = 640
-    cwid = lambda ci: (' data-colwidth="%d"' % int(round(col_widths[ci] / 100.0 * tbl_px))) \
+    # 列宽通道（2026-11-25 手机实测 + 探针实验定稿）：
+    #  ① width="%" 属性 —— 微信 ProseMirror 保留 HTML 属性形式、剥离 style
+    #     里的 width；百分比随屏幕宽度自适应。**必须只靠它**：同时写
+    #     data-colwidth(px) 时微信按 px 定宽，手机上 640px 表格超出 375px 屏，
+    #     首列占比飙到 27%（探针实证：去掉 data-colwidth 后表格宽=容器宽
+    #     558px，列宽按 % 自适应，状态列 10%）。
+    #  ② 单元格 style width + colgroup —— 浏览器直开用；微信会剥离。
+    cwid = lambda ci: (' width="%d%%"' % col_widths[ci]) \
         if (col_widths and len(col_widths) == ncol) else ""
     wstyle = lambda ci: ("width:%d%%;" % col_widths[ci]) if (col_widths and len(col_widths) == ncol) else ""
+    # 单行列（内容短、强制单行）用更小的水平内边距，避免该列视觉偏宽
+    pad = lambda ci: ("padding:8px 6px;" if ci in single else "padding:8px 12px;")
+    padh = lambda ci: ("padding:9px 6px;" if ci in single else "padding:9px 12px;")
     out.append("<tr>" + "".join(
-        '<th%s style="text-align:center;padding:9px 12px;border:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;%s">%s</th>'
-        % (cwid(ci), t["line"], t["primary"], t["ink"], wstyle(ci), leaf(esc(c))) for ci, c in enumerate(header)) + "</tr>")
+        '<th%s style="text-align:center;%sborder:1px solid %s;border-bottom:2px solid %s;color:%s;font-weight:800;white-space:nowrap;%s">%s</th>'
+        % (cwid(ci), padh(ci), t["line"], t["primary"], t["ink"], wstyle(ci), leaf(esc(c))) for ci, c in enumerate(header)) + "</tr>")
     for r in body:
         cells = (r + [""] * ncol)[:ncol]
         tds = []
@@ -366,8 +377,8 @@ def data_table(rows, t, col_widths=None, status_col=None):
             # 状态列内容短（🟢 强 等）且必须单行：white-space:nowrap 兜底防换行；
             # 其余内容列保持可换行
             nowrap = "white-space:nowrap;" if ci in single else ""
-            tds.append('<td%s style="padding:8px 12px;border:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s%s">%s</td>'
-                       % (cwid(ci), t["line"], t["body"], nowrap, wstyle(ci), cell))
+            tds.append('<td%s style="%sborder:1px solid %s;color:%s;vertical-align:top;overflow-wrap:break-word;%s%s">%s</td>'
+                       % (cwid(ci), pad(ci), t["line"], t["body"], nowrap, wstyle(ci), cell))
         out.append("<tr>" + "".join(tds) + "</tr>")
     out.append("</table></section>")
     return "".join(out)
