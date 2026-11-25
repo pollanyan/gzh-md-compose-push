@@ -1,6 +1,11 @@
 ---
 name: gzh-md-compose-push
+display_name: 公众号 Markdown 排版推送
+display_name_en: GZH Markdown Compose & Push
 description: "本技能用于将 Markdown 排版成微信公众号 HTML 并推送到草稿箱，内置浏览器扫码（默认，无需凭证）与官方 API（可选，需 AppID/AppSecret）双通道。提供 6 套主题预览、代码高亮、图片/封面上传、草稿覆盖与回读核验，并遵循三段式确认（排版方案→确认→本地文件→确认→推送）。当用户要求『公众号排版』『把 Markdown 转公众号格式』『推到公众号草稿箱』『发公众号但不想用 AppID』『个人公众号推草稿』，或明确要求『用 API/接口方式推送』时，应使用本技能。"
+description_zh: "将 Markdown 排版成公众号 HTML 并推送到草稿箱：6 主题深浅配色、扫码/API 双通道、插图自动上传、合规校验。"
+description_en: "Compose Markdown into styled WeChat Official Account HTML and push it to the draft box: 6 themes with light/dark schemes, QR/API channels, auto image upload, and compliance validation."
+author: pollanyan
 version: 1.0.0
 license: MIT
 agent_created: true
