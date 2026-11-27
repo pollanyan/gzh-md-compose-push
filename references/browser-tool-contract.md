@@ -1,6 +1,6 @@
 # 浏览器通道：Agent 自带工具的复用契约
 
-本文件回答一个问题：**扫码通道能不能不装 patchright，直接让 Agent 用它自己的浏览器能力做？** 能。多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备浏览器操作能力，也有宿主预装了别的等价工具、技能或插件；无论哪种，Agent 都是调接口操作浏览器。浏览器工具属于 Agent 侧能力，不属于本技能，也不绑定某个宿主：chrome-devtools 是独立开源项目，可装到多种 Agent 上。技能只要求能力满足契约，并把公众号后台的精确操作写成一份与工具无关的契约，让 Agent 用当前环境提供的接口去执行。
+本文件回答一个问题：**扫码通道能不能不装 patchright，直接让 Agent 用它自己的浏览器能力做？** 分情况：**文章含代码块（需要代码高亮）→ 不能，patchright 必选**；工具路径的 `insertHTML` 保存后会被微信剥离代码块彩色 span，只有脚本路径的原生剪贴板粘贴能保住高亮（2026-11-27 实测）。**文章无代码块 → 能**，多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备浏览器操作能力，也有宿主预装了别的等价工具、技能或插件；无论哪种，Agent 都是调接口操作浏览器。浏览器工具属于 Agent 侧能力，不属于本技能，也不绑定某个宿主：chrome-devtools 是独立开源项目，可装到多种 Agent 上。技能只要求能力满足契约，并把公众号后台的精确操作写成一份与工具无关的契约，让 Agent 用当前环境提供的接口去执行。
 
 ## 一、先探测当前 Agent 的浏览器工具
 
@@ -23,7 +23,7 @@
 5. 独立的持久化浏览器环境，登录态不混入用户日常浏览器；
 6. 截图（放大二维码给用户扫）。
 
-六项全满足 → 走工具路径，把第二节契约单元翻译成该工具的接口调用（见第四节）。缺 2 或 4 任一项 → 正文注入或图片上传做不了，**退回 `mp_*.py` 脚本路径**，不要硬凑。computer-use 类工具没有第 2 项，只能承担扫码、按钮点击和上传，正文注入必须另有 JS 执行能力。
+**文章含代码块时，六项全满足也不走工具路径**——直接判定工具路径不满足契约，走 `mp_*.py` 脚本路径（patchright 必选）。文章无代码块时：六项全满足 → 走工具路径，把第二节契约单元翻译成该工具的接口调用（见第四节）。缺 2 或 4 任一项 → 正文注入或图片上传做不了，**退回 `mp_*.py` 脚本路径**，不要硬凑。computer-use 类工具没有第 2 项，只能承担扫码、按钮点击和上传，正文注入必须另有 JS 执行能力。
 
 上面表格只列常见宿主；任何接口等价的工具（Playwright MCP、browser-use 等）都按同样方式适配，不用改契约。
 
@@ -74,6 +74,8 @@
 4. 轮询最多 8 秒，若出现「内容结构检测」弹窗（`.weui-desktop-dialog`），点「继续插入」——不点内容会被静默丢弃；
 5. 读 `.mock-iframe-body` 的 `innerText.length`，按 HTML 预期非空白字符数的 0.7 倍作下限（下限最小 20）；不达标则清空重试一次。
 
+**为什么工具路径做不到剪贴板粘贴（2026-11-27 取证）**：chrome-devtools-mcp 1.12.0 的 `press_key` 底层是 `page.pptrPage.keyboard.down/press/up`（puppeteer 的 CDP 合成按键，`build/src/tools/input.js:628-661`），不是操作系统级真实按键；Chrome 不会把它当作可触发剪贴板读取的用户手势，所以 `navigator.clipboard.write` 明明成功，页面却没有原生 `paste` 事件。合成 `ClipboardEvent('paste')` 又被公众号编辑器忽略。`insertHTML` 绕过了编辑器的原生粘贴转换管道（这段管道会把 `text/html` 里的颜色 span 映射进 ProseMirror 的 mark），保存时 ProseMirror 按自己的模型序列化，代码块里的彩色 span 因此被丢弃。这不是「CLI 不能驱动浏览器」，而是**合成按键无法触发原生粘贴 + 兜底注入路径会丢样式**这两个具体能力缺口。
+
 **工具路径的实测修正（2026-11-26，2026-11-27 补充关键限制）**：chrome-devtools CLI 在无头/有头下 `press_key` 发 `Cmd+V` / `Ctrl+V` 都不触发原生粘贴（正文只剩 10 字占位符），即使 `navigator.clipboard.write` 返回成功。此时可在同一 `evaluate_script` 里用 `document.execCommand('selectAll')` + `document.execCommand('delete')` + `document.execCommand('insertHTML', false, html)`（先真实点击编辑器取得焦点）写入全文，正文/图片/章节能保存并重开核验。**但 2026-11-27 实测：注入时 DOM 里代码高亮 span 完整（2434 个），保存后微信后端会把代码块里的彩色 span 全部剥离（重开只剩 152 个非代码块颜色）**——代码高亮必丢。因此**含代码块的文章判定工具路径不满足契约，必须改走 `mp_*.py` 的剪贴板粘贴路径**（实测保存重开后 1862 个代码高亮 span 全保留）；`insertHTML` 仅限无代码块的纯文本文章兜底。仍**禁止**合成 `ClipboardEvent('paste')` 和直接改 `innerHTML`。也**不要自己算坐标点击**：正文可高达数千像素，`scrollIntoView` 后坐标可能为负；用工具的 DOM 定位 / 选择器点击。
 
 ### 5. 正文配图
@@ -99,6 +101,16 @@
 ### 8. 回读核验
 
 用 `appmsgid` 重开草稿，核对标题 / 署名 / 摘要有值、正文长度 > 20、真图数等于预期、封面非默认。全部满足输出 PASS，否则 FAIL 并按 `mp-wechat-notes.md` 排查。
+
+### 9. 收尾：停掉工具 daemon（必做）
+
+**工具路径用完后必须主动停 daemon**，不要留着常驻：chrome-devtools CLI 的后台服务是隐式启动、长期常驻的，一旦用它连过公众号后台（尤其带 `--user-data-dir` 指向推送专用 profile 时），它会一直占着 profile 和 Singleton 锁。后果有两个：① 长期占系统资源；② 下次走脚本路径 `mp_*.py` 推送时 `launch_persistent_context` 直接报 ProcessSingleton / SingletonLock 起不来（2026-11-27 实测踩过）。
+
+- chrome-devtools CLI：`chrome-devtools stop`。
+- 其它等价工具：用该工具提供的 stop / teardown 接口；没有就用 `mp_preflight.py --fix` 兜底清理。
+- 停完再跑一次 `python3 scripts/mp_preflight.py`，确认输出 PASS，才算收尾干净。
+
+对应地，**脚本路径每次推送前也要先跑 `mp_preflight.py --fix`**（见 SKILL.md 第 3 步第 0 项），这是兜底：即使工具路径忘了停，推送前也能自动清掉占用。两条合起来保证 profile 不会互相卡住。
 
 ## 三、为什么这不是「自然语言随便驱动」
 

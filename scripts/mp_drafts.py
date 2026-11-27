@@ -14,8 +14,10 @@
 
 ⚠️ 本脚本**只删草稿**，永不点「发表」；也不会碰弹窗里的「退出登录」。
 
-实测到的结构（改版时照这个找）：
+  实测到的结构（改版时照这个找）：
   .weui-desktop-publish__cover-item       一张草稿卡（标题 + 更新时间）
+    封面缩略图是子元素 i.weui-desktop-publish__cover__thumb 的 background-image，
+    不在卡片根节点上；判有无封面必须查所有后代，只看根节点会误报「无封面」。
   .weui-desktop-publish__opr              悬停才浮出的操作组
     a.weui-desktop-icon20.weui-desktop-icon-btn  第 1 个 + tooltip「删除」= 删除
     span.publish_enable_button / a...link_send-multi              = 发表
@@ -37,8 +39,12 @@ LIST_URL = ("https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=
 CARDS_JS = """()=>[...document.querySelectorAll('.weui-desktop-publish__cover-item')]
   .map(e=>({title:((e.querySelector('.weui-desktop-publish__cover__title')||{}).innerText||'').trim(),
             tip:((e.querySelector('.weui-desktop-publish__tips')||{}).innerText||'').trim(),
-            hasCover:!!(e.querySelector('img')||/url\\(/.test(
-              getComputedStyle(e).backgroundImage||''))}))"""
+            hasCover:!!(e.querySelector('img')||
+              [...e.querySelectorAll('*')].some(x=>{
+                const b=getComputedStyle(x).backgroundImage||'';
+                return b && b!=='none' && /url\\(/.test(b);
+              })||
+              /url\\(/.test(getComputedStyle(e).backgroundImage||''))}))"""
 
 FIND_JS = """(kw)=>{
   const items=[...document.querySelectorAll('.weui-desktop-publish__cover-item')];

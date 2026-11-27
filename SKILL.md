@@ -36,12 +36,13 @@ agent_created: true
 
 ```
 scripts/
-  obsidian_preprocess.py  # Obsidian 稿预处理：frontmatter/callout/wiki链接/块嵌入 → 纯净 Markdown
+  obsidian_preprocess.py  # Obsidian 稿预处理：frontmatter/callout/内部引用双场景/块嵌入 → 纯净 Markdown
   md_to_gzh.py            # Markdown→公众号 HTML（6 主题 + 代码高亮 + 合规）
   validate_gzh_html.py    # 平台合规校验（ERROR 必须清零）
   wrap_preview.py         # 生成带「复制到公众号」按钮的预览页
   wx_api_publish.py       # API 可选通道：config-check/list/push/del（纯标准库）
   mp_full.py              # 扫码默认通道：登录 / 建草稿 / 覆盖草稿 / 正文注入
+  mp_preflight.py         # 推送前环境检查：专用 profile 是否被占、锁是否陈旧（--fix 清理）
   mp_check.py             # 草稿回读核验（PASS/FAIL）
   mp_drafts.py            # 列出/删除草稿
   upload_md_images.py     # 扫描 Markdown 插图，上传微信图床并替换 src
@@ -60,7 +61,7 @@ references/
   ecosystem-survey.md     # 本次生态盘点与方案对比
 doc/
   方案设计规格.md          # 设计规格（需求结论 / 参考技能取证 / 生态盘点 / 验证记录）
-requirements.txt          # patchright（仅扫码脚本路径需要，纯排版零依赖）
+requirements.txt          # patchright（扫码脚本路径需要；扫码 + 含代码块时为必选，纯排版零依赖）
 ```
 
 ## 工作流
@@ -70,8 +71,10 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
 依赖按需触发，不要预先手工安装：
 
 - 纯排版 / 校验 / 预览的三个脚本只用标准库，**零依赖**。
-- **扫码通道优先复用 Agent 的浏览器操作能力**，按 `references/browser-tool-contract.md` 的精确契约执行：多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备该能力，也可能是宿主预装的其他等价工具、技能或插件；浏览器工具属于 Agent 侧能力，不绑定某个宿主。推送前先探测当前环境暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。**但文章含代码块时必须走脚本路径**：工具路径的 `insertHTML` 虽能写入彩色 span，保存后微信后端会把它全部剥离，代码高亮必丢（2026-11-27 实测）。
-- 只有 Agent 没有任何满足契约的浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」，**或文章含代码块需要保留高亮**时，才改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
+- **先判断文章是否含代码块，再决定 patchright 是否必装**：
+  - **含代码块（需代码高亮）→ patchright 必选**。工具路径的 `insertHTML` 虽能写入彩色 span，保存后微信后端会把它全部剥离，代码高亮必丢（2026-11-27 实测）。因此只要「扫码通道 + 含代码块」，无论 Agent 有没有浏览器工具，都必须走技能自带的 `mp_*.py` 脚本路径的原生剪贴板粘贴。
+  - **无代码块时优先复用 Agent 的浏览器操作能力**，按 `references/browser-tool-contract.md` 的精确契约执行：多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备该能力，也可能是宿主预装的其他等价工具、技能或插件；浏览器工具属于 Agent 侧能力，不绑定某个宿主。推送前先探测当前环境暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。
+- Agent 没有任何满足契约的浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」时（含代码块场景已在上一条强制），改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
 - API 通道：`wx_api_publish.py` 纯标准库，只需凭证。
 
 两种扫码执行器跑的是**同一份契约**（见 `references/browser-tool-contract.md`），差别只在调用方式：工具路径由 Agent 调 MCP / CLI 接口，脚本路径由 patchright 实现同一组单元。不要把「用 Agent 工具」当成自然语言自由发挥——每一步的 URL、选择器、JS、判据都是写死的。
@@ -88,8 +91,16 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
    python3 <SKILL>/scripts/obsidian_preprocess.py <article.md> -o <article>_纯净.md
    ```
    处理 YAML frontmatter（title 单独写成 `<!-- gzh-title: ... -->` 标记行，正文的 `#`
-   全部按章节渲染）、`> [!tip]` callout、`[[wiki]]` 链接、`![[文件#块]]` 嵌入展开；
+   全部按章节渲染）、`> [!tip]` callout（原样保留给转换器按官方类型渲染，不在预处理里降级成加粗引用）、`[[笔记名]]` 内部引用按场景处理、`![[文件#块]]` 嵌入展开；
    超链接与图片行原样保留，由排版器统一收 reference。
+   **内部引用双场景（2026-11-27 用户二次定稿）**：先收集 `![[文件#块]]` 成功展开的
+   文件名集合——① **已引入**：`[[文件]]` 换成《文件》纯文本保留（读者在文中读得到，
+   不算伪装资料），连「见 / 可参考」引导词与句子结构都不动；② **仅链接未引入**：
+   擦除引用并修补上下文——引导词前是名词短语（「冲突具体案例，可参考 [[X]]」）
+   就原位写「不在此展开」，是完整分句（「按…核算，见 [[X]]」）则连引导词一起删。
+   代码块/行内代码里的方括号不动。切勿一律擦除：会留下「排查方法；」「冲突具体
+   案例。」这类残句（用户实测反馈）。`![[文件#块]]` 是内容嵌入（展开后读者能直接
+   读到），保留展开逻辑。
    不是 Obsidian 稿可跳过，直接用原文件做下一步。
 3. **插图预处理**：若 Markdown 含 `![...](...)`，先上传图片并替换地址；本地路径、http/https 地址、data URI 都支持：
    ```bash
@@ -133,8 +144,14 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 
 用户确认本地文件后，先按 `references/browser-tool-contract.md` 探测宿主浏览器工具，决定执行器：
 
-- **有浏览器工具**：按契约第一节的能力清单适配（任何接口等价的 MCP / skill / CLI 都行，不挑宿主，多数是 chrome-devtools-mcp），用该工具的接口执行登录、写标题、正文注入、上传图片、保存、设封面、回读核验；每一步的判据与「必读」踩坑清单一致。不装 patchright。
-- **无浏览器工具或接口不满足契约**（不能写 text/html 剪贴板、不能上传文件、无独立 profile）：用下面的 `mp_*.py` 脚本路径。
+- **有浏览器工具且文章无代码块**：按契约第一节的能力清单适配（任何接口等价的 MCP / skill / CLI 都行，不挑宿主，多数是 chrome-devtools-mcp），用该工具的接口执行登录、写标题、正文注入、上传图片、保存、设封面、回读核验；每一步的判据与「必读」踩坑清单一致。不装 patchright。
+- **文章含代码块 → 无论有没有浏览器工具，都走 `mp_*.py` 脚本路径**（工具路径注入的代码高亮保存后会被微信剥离）；**无浏览器工具或接口不满足契约**（不能写 text/html 剪贴板、不能上传文件、无独立 profile）时同样走脚本路径。两种情况都用下面的 `mp_*.py` 命令，patchright 为必选依赖。
+
+0. **推送前环境检查（两种情况都必做，不可跳过）**：
+   ```bash
+   python3 <SKILL>/scripts/mp_preflight.py --fix
+   ```
+   查出 `RESULT: PASS 可以推送` 才继续。它会检测专用 profile 是否被 chrome-devtools daemon / 残留浏览器进程占住、有没有陈旧 Singleton 锁，并只清理占用该 profile 的进程与锁（不碰用户日常 Chrome）。**2026-11-27 实测：工具路径的 daemon 曾常驻并锁住 profile，脚本路径直接报 ProcessSingleton 起不来**；这一步能提前发现并清掉，别等撞异常才处理。若 `--fix` 后仍 FAIL，停掉工具 daemon（`chrome-devtools stop`）再查。
 
 1. **先问覆盖还是新建**（这是重复推送的必问项）：
    - 用 `mp_drafts.py list` 列出草稿箱现有草稿，让用户看标题。
@@ -144,7 +161,7 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
    ```bash
    python3 <SKILL>/scripts/mp_full.py login
    ```
-   脚本产出 `scripts/mp-login-qrcode-big.png`（放大版）——用 present_files 给用户扫。等 900 秒，登录成功自动返回并删除二维码文件。
+   脚本产出 `~/.config/gzh-md-compose-push/mp-login-qrcode-big.png`（放大版，配置目录，`GZH_MP_RUNTIME` 可改）——用 present_files 给用户扫。等 900 秒，登录成功自动返回并删除二维码文件。绝不落在技能目录。
 3. **准备文章模块**：复制 `templates/article_template.py` 到工作区，填 `TITLE`（≤64 字）、`DIGEST`（≤120 字）；`AUTHOR` **不用手填**——模板自动读配置项 `author`（第 1 步收集并持久化），模块里显式改那一行可临时覆盖；`build_content()` 返回第 2 步的 HTML 文件内容：
    ```python
    TITLE = "文章标题"; DIGEST = "摘要"; AUTHOR = ""
@@ -192,6 +209,8 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 
 ## 关键实现依据（修复的坑）
 
+- **Obsidian callout 特殊渲染（2026-11-27）**：照官方规格（`help.obsidian.md/callouts` + `docs.obsidian.md/Reference/CSS variables/Editor/Callout`）实现——13 内置类型各有独立色（左侧 3px 竖条 + 淡背景）与图标，别名（important→tip、summary/tldr→abstract、faq/help→question、error→danger、cite→quote 等）都识别，未知类型回退 note，大小写不敏感；`+/-` 折叠只作视觉标记（公众号不能真折叠，details/JS 会被剥）。预处理**不改写 callout 头**（旧版改成 `> **标题**` 导致类型全丢），由转换器 `callout_block()` 渲染；标题用 leaf 包裹否则校验器报 WARNING。
+  **图标用单色线条 Unicode 符号**（`CALLOUT_ICONS`，如 warning=⚠、tip=♨，颜色取类型色），**不要用 Lucide SVG**——2026-11-27 真实推送回读实测：公众号粘贴阶段剥离 `<svg>`，绕过粘贴直接注入后保存又被服务端剥离，clip-path / data URI 背景图同样被删，只有纯文本节点存活（和代码高亮同类坑）。⚠ 必须用裸字符 U+26A0，加 FE0E 会变彩色 emoji。
 - **代码高亮拆行 bug**：公众号把每个 `<span leaf>` 当原子节点重排。逐 token 一个 leaf 会让 `export const X = [` 被拆成 5 行、缩进错位、行距撑大。`md_to_gzh.py` 改为**每行一个 leaf，行内用不带 leaf 的彩色 span**，颜色保留且排版稳定。校验器已验证合规。**绝不改回图片方案**（用户明确否决）。
 - **扫码登录**：patchright（Playwright stealth 分支）+ 独立 Chromium profile，二维码是 `.login__type__container__scan__qrcode`，放大 4 倍截图给用户扫；登录态存 `~/.config/gzh-md-compose-push/mp_profile/Default/Network/Cookies`，**绝不写进技能目录**，分享/同步技能前确认技能目录无此目录（含完整后台登录态）。
 - **正文注入**：编辑器是 ProseMirror（`.mock-iframe-body .ProseMirror`，2026 版无 iframe）。脚本路径走 `clipboard.write(text/html)` + `Cmd+V`（mac）/ `Control+V` + 点「继续插入」。工具路径若 `press_key` 粘贴不触发（chrome-devtools CLI 实测会只剩占位符），可用 evaluate_script 的 `execCommand('selectAll'/'delete'/'insertHTML', html)` 写入正文——但 **2026-11-27 实测保存后微信会剥离代码块里的彩色 span**（注入 2434 个、重开剩 152 个），**含代码高亮的文章必须走脚本路径**（保存后 1862 个高亮 span 全保留），insertHTML 仅限无代码块文章兜底。始终禁止合成 paste 事件与直接改 innerHTML。
@@ -203,3 +222,12 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 - 登录态目录 `~/.config/gzh-md-compose-push/mp_profile/` 是公众号后台完整 Cookies，**绝不外传**；`mp_full.py logout` 一键清除。二维码与调试截图也只落在该配置目录，不污染技能包。
 - 二维码文件是活码，登录后脚本自动删除；不要手工留存。
 - 校验器 `validate_gzh_html.py` 的 ERROR 必须清零；WARNING 也要检查到 0（半角标点在代码区内豁免）。
+
+## 变更后的回归测试
+
+只要改了转换器、预处理、契约、文档规则或依赖口径，交付前先跑
+`python3 -m unittest discover -s tests -v`（技能根目录，38 项，默认离线）。
+测试覆盖标题/章节、全篇 reference、代码高亮与横滑、表格、引用块、Obsidian
+预处理、主题预览、预览页深浅切换、安全边界与文档一致性；全部通过才算改完。
+真实草稿回读用 `GZH_LIVE=1 GZH_APPMSGID=<编号>` 开启，仅验证时可选。
+**未经用户明确要求不做 git commit / git push。**

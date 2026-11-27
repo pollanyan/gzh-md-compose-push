@@ -277,6 +277,95 @@ def quote_block(text, t, label=None):
             '</section>' % (bg, bar, fg, inline(text, t)))
 
 
+# ───────────────────────── Obsidian callout ─────────────────────────
+# 照 Obsidian 官方内置类型与别名（help.obsidian.md/callouts、
+# docs.obsidian.md/Reference/CSS variables/Editor/Callout）复刻：
+# 每种类型有独立色（左侧竖条 + 淡背景）与图标；未知名回退 note；大小写不敏感。
+# 公众号不能真折叠（details/JS 会被剥），折叠标记 +/- 只作视觉提示。
+# 图标：Obsidian 用 Lucide 线条描边图标。微信公众号编辑器实测会剥离一切
+# SVG / clip-path / data URI（粘贴阶段剥离，直接注入保存后服务端再删一次），
+# 所以改用语义等价的「单色线条 Unicode 符号」——纯文本节点必定存活，
+# 颜色继承标题的类型色，观感接近 Obsidian（⚠ 与 Obsidian 警告三角一致）。
+# ⚠ 用裸字符 U+26A0（不加 FE0E/emoji 变体），否则会变彩色 emoji。
+CALLOUT_ICONS = {
+    "note":     "✎",   # 铅笔
+    "abstract": "⚑",   # 书签/旗
+    "info":     "ⓘ",   # 圈 i
+    "todo":     "✓",   # 勾选
+    "tip":      "♨",   # 热气（火焰的线条近似，Unicode 无线条火焰字符）
+    "success":  "✓",   # 勾选
+    "question": "?",   # 问号
+    "warning":  "⚠",   # 警告三角（裸字符=线条）
+    "failure":  "✕",   # 叉
+    "danger":   "⚡",   # 闪电（裸字符=线条）
+    "bug":      "✺",   # 虫/星芒
+    "example":  "☰",   # 列表
+    "quote":    "❝",   # 引号
+}
+
+
+def callout_icon(color, key):
+    """单色线条 Unicode 符号，颜色取类型色，与标题同色（纯文本，公众号必存活）。"""
+    ch = CALLOUT_ICONS.get(key, CALLOUT_ICONS["note"])
+    return ('<span style="color:%s;font-size:17px;line-height:1;margin-right:6px;">'
+            '%s</span>' % (color, ch))
+
+
+CALLOUT_TYPES = {
+    "note":     dict(color="#448AFF", title="备注"),
+    "abstract": dict(color="#00BCD4", title="摘要"),
+    "info":     dict(color="#448AFF", title="信息"),
+    "todo":     dict(color="#448AFF", title="待办"),
+    "tip":      dict(color="#00BFA5", title="提示"),
+    "success":  dict(color="#4CAF50", title="成功"),
+    "question": dict(color="#FFC107", title="问题"),
+    "warning":  dict(color="#FF9800", title="警告"),
+    "failure":  dict(color="#F44336", title="失败"),
+    "danger":   dict(color="#F44336", title="危险"),
+    "bug":      dict(color="#F44336", title="缺陷"),
+    "example":  dict(color="#9C27B0", title="示例"),
+    "quote":    dict(color="#9E9E9E", title="引用"),
+}
+CALLOUT_ALIASES = {
+    "summary": "abstract", "tldr": "abstract",
+    "hint": "tip", "important": "tip",
+    "check": "success", "done": "success",
+    "help": "question", "faq": "question",
+    "caution": "warning", "attention": "warning",
+    "fail": "failure", "missing": "failure",
+    "error": "danger", "cite": "quote",
+    "default": "note",
+}
+# > [!tip] 标题  /  > [!faq]- 标题  /  > [!NOTE]（无标题）
+CALLOUT_HEAD = re.compile(r"^\[!([A-Za-z0-9_-]+)\]([+-])?\s*(.*)$")
+
+
+def callout_block(head, lines, t):
+    """一个 Obsidian callout → 类型色卡片：竖条 + 淡背景 + 图标标题 + 正文。
+       head 是 CALLOUT_HEAD 的 match；lines 是去掉 '>' 后的正文行。"""
+    raw_type, fold, title = head.group(1), head.group(2), head.group(3).strip()
+    key = CALLOUT_ALIASES.get(raw_type.lower(), raw_type.lower())
+    spec = CALLOUT_TYPES.get(key, CALLOUT_TYPES["note"])
+    color = spec["color"]
+    dark = bool(t.get("code_dark"))
+    bg = color + ("22" if dark else "14")   # 淡背景：深色 13% / 浅色 8%
+    title = title or spec["title"]          # 无自定义标题 → 类型的中文默认名
+    fold_mark = "▾" if fold == "+" else ("▸" if fold == "-" else "")
+    label = ("%s%s" % (title, (" " + fold_mark) if fold_mark else ""))
+    # 图标是单色线条 Unicode 符号（callout_icon，颜色取类型色），与标题一起放进 leaf：
+    # 中文文本必须在 span[leaf] 内，否则公众号编辑器会剥离样式（校验器 WARNING）。
+    # 不用 SVG：公众号粘贴阶段与服务端的双重过滤都会剥离（2026-11-27 实测）；正文走 inline() 保证行内解析。
+    head_html = '<span leaf="">%s%s</span>' % (callout_icon(color, key), esc(label))
+    body_html = "".join("<p style=\"margin:0 0 8px;font-size:15px;line-height:1.75;color:%s;"
+                        "text-align:left;\">%s</p>" % (t["body"], inline(ln, t))
+                        for ln in lines if ln.strip())
+    return ('<section style="background:%s;border-left:3px solid %s;'
+            'padding:12px 14px;margin:0 10px 22px;">'
+            '<p style="margin:0 0 8px;font-size:15px;font-weight:700;color:%s;'
+            'line-height:1.7;text-align:left;">%s</p>%s</section>'
+            % (bg, color, color, head_html, body_html))
+
+
 def image_block(src, alt, t):
     """整行 ![alt](src) → 带细线框的图片块（无底色），图下左对齐一行说明。
        src 必须是 mmbiz 图床 URL 或可访问的 http(s) URL；本地路径由
@@ -608,7 +697,13 @@ def convert(md, theme_key=DEFAULT_THEME, scheme="light"):
             buf = []
             while i < len(lines) and lines[i].strip().startswith(">"):
                 buf.append(lines[i].strip().lstrip(">").strip()); i += 1
-            body.append(quote_block(" ".join(buf), t)); continue
+            # Obsidian callout：首行是 [!type] 时用类型色卡片渲染，否则普通引用块。
+            head = CALLOUT_HEAD.match(buf[0]) if buf else None
+            if head:
+                body.append(callout_block(head, buf[1:], t))
+            else:
+                body.append(quote_block(" ".join(buf), t))
+            continue
         if s.startswith("|") and i + 1 < len(lines) and re.match(r"^\|[\s\-:|]+\|$", lines[i + 1].strip()):
             rows = []
             while i < len(lines) and lines[i].strip().startswith("|"):

@@ -9,14 +9,14 @@
 - 独立 profile：`~/.config/gzh-md-compose-push/mp_profile/`（Cookies 在 `Default/Network/Cookies`；`GZH_MP_RUNTIME` 可改根目录）。与用户日常浏览器登录态不共享；与宿主 Agent 是否登录无关，浏览器工具归属哪个 Agent 都不影响这份 profile。**不放技能目录**，避免安装副本/分享时带走登录态（2026-11-26 复查定稿）。
 - 登录态过期表现：脚本又去截二维码。`MP_LOGIN_WAIT` 默认 900 秒，登录成功立即返回。
 - 二维码约 4 分钟刷新一次；用户要扫的是放大版 `~/.config/gzh-md-compose-push/mp-login-qrcode-big.png`（~490px），原始 122px 扫不出。
-- profile 被占用（SingletonLock）→ 关残留 Chromium 进程或删配置目录下的 `mp_profile` 重新扫码。
+- profile 被占用（SingletonLock / ProcessSingleton）→ 先跑 `python3 scripts/mp_preflight.py --fix`：只结束命令行里带本技能 profile 的进程、删陈旧锁，不碰用户日常 Chrome；仍 FAIL 就停掉工具 daemon（`chrome-devtools stop`）再查（详见 `browser-tool-contract.md` 第 9 单元）。
 - `logout` = 删配置目录下的 `mp_profile`；技能目录本身不应有登录态，无需分享前手工清理。
 
 ## 编辑器 DOM（2026 版）
 
 - 没有 iframe（老教程 `#ueditor_0` 已废弃）。正文 `.mock-iframe-body .ProseMirror`；标题 `.title-editor__input .ProseMirror`；署名 `input#author`；摘要 `textarea#js_description`。
 - 填 HTML 唯一可靠路径：真实点击聚焦 → `ctx.grant_permissions(['clipboard-read','clipboard-write'], origin='https://mp.weixin.qq.com')` → `navigator.clipboard.write` 写 `text/html` → `Cmd+V`（macOS）/ `Control+V`（Windows/Linux）。修饰键必须按平台选——2026-11-25 实测 mac 上 Control+V 不触发粘贴（注入只剩 10 字符），Control+A 也不全选。
-  无效做法：合成 `ClipboardEvent('paste')`、直接改 `innerHTML`。`execCommand('insertHTML')` 在 patchright 脚本路径实测无效；chrome-devtools 工具路径的 `evaluate_script` 里能写入正文，但 **2026-11-27 实测保存后微信后端会剥离代码块里的彩色 span**（注入时 2434 个、重开只剩 152 个非代码块颜色），**含代码高亮的文章必须走剪贴板粘贴的脚本路径**（保存后 1862 个代码高亮 span 全保留）；`insertHTML` 仅限无代码块的纯文本文章兜底。见 `browser-tool-contract.md`。
+  无效做法：合成 `ClipboardEvent('paste')`、直接改 `innerHTML`。chrome-devtools 的 `press_key` 底层是 puppeteer 的 CDP 合成按键，不是系统级真实按键，无法触发 Chrome 的原生粘贴（所以写剪贴板成功也不会有 paste 事件）；`insertHTML` 绕过编辑器原生粘贴转换，保存时 ProseMirror 序列化会丢代码块颜色。`execCommand('insertHTML')` 在 patchright 脚本路径实测无效；chrome-devtools 工具路径的 `evaluate_script` 里能写入正文，但 **2026-11-27 实测保存后微信后端会剥离代码块里的彩色 span**（注入时 2434 个、重开只剩 152 个非代码块颜色），**含代码高亮的文章必须走剪贴板粘贴的脚本路径**（保存后 1862 个代码高亮 span 全保留）；`insertHTML` 仅限无代码块的纯文本文章兜底。见 `browser-tool-contract.md`。
 - 粘贴后可能弹「内容结构检测」，必须点「继续插入」，否则内容被静默丢弃（不是每次都弹，轮询 8 秒）。
 - 结构检测两条硬规则：文字背景禁渐变（CTA 用纯色）；`line-height` 不能小于 `font-size`（19px→1.45、17px→1.55、14/13px→1.6）。
 - 不要手算点击坐标（正文可高 5000+px，scrollIntoView 后 rect.y 为负）；用 `pg.click(selector)` 让 Playwright 算。
@@ -56,7 +56,8 @@
 
 - **微信编辑器会剥离 `<colgroup>/<col>`**（2026-11-25 手机实测：colgroup 里的
   列宽在公众号后台/手机端全部失效，table-layout:fixed 平分列宽；PC 浏览器预览
-  正常所以此前未发现）。列宽必须同时写在**每个 th/td 的内联样式**上。
+  正常所以此前未发现）。这是早期发现的坑；**最终解法是 `width="%"` HTML 属性**（见
+  下文「列宽最终解」），不要再退回 colgroup / td 内联样式定宽——那些都会被微信剥离。
 - 引用/正文的 `text-align` 必须显式写 `left`：微信手机端对未指定段落默认
   两端对齐，PC 浏览器默认左对齐——不写死则三端不一致（手机「两端对齐」实拍）。
 - 引用段不加「QUOTE」等装饰性英文标签（用户定稿：影响阅读）。
