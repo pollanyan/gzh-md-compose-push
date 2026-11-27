@@ -70,8 +70,8 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
 依赖按需触发，不要预先手工安装：
 
 - 纯排版 / 校验 / 预览的三个脚本只用标准库，**零依赖**。
-- **扫码通道优先复用 Agent 的浏览器操作能力**，按 `references/browser-tool-contract.md` 的精确契约执行：多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备该能力，也可能是宿主预装的其他等价工具、技能或插件；浏览器工具属于 Agent 侧能力，不绑定某个宿主。推送前先探测当前环境暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。
-- 只有 Agent 没有任何满足契约的浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」时，才改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
+- **扫码通道优先复用 Agent 的浏览器操作能力**，按 `references/browser-tool-contract.md` 的精确契约执行：多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备该能力，也可能是宿主预装的其他等价工具、技能或插件；浏览器工具属于 Agent 侧能力，不绑定某个宿主。推送前先探测当前环境暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。**但文章含代码块时必须走脚本路径**：工具路径的 `insertHTML` 虽能写入彩色 span，保存后微信后端会把它全部剥离，代码高亮必丢（2026-11-27 实测）。
+- 只有 Agent 没有任何满足契约的浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」，**或文章含代码块需要保留高亮**时，才改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
 - API 通道：`wx_api_publish.py` 纯标准库，只需凭证。
 
 两种扫码执行器跑的是**同一份契约**（见 `references/browser-tool-contract.md`），差别只在调用方式：工具路径由 Agent 调 MCP / CLI 接口，脚本路径由 patchright 实现同一组单元。不要把「用 Agent 工具」当成自然语言自由发挥——每一步的 URL、选择器、JS、判据都是写死的。
@@ -194,7 +194,7 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 
 - **代码高亮拆行 bug**：公众号把每个 `<span leaf>` 当原子节点重排。逐 token 一个 leaf 会让 `export const X = [` 被拆成 5 行、缩进错位、行距撑大。`md_to_gzh.py` 改为**每行一个 leaf，行内用不带 leaf 的彩色 span**，颜色保留且排版稳定。校验器已验证合规。**绝不改回图片方案**（用户明确否决）。
 - **扫码登录**：patchright（Playwright stealth 分支）+ 独立 Chromium profile，二维码是 `.login__type__container__scan__qrcode`，放大 4 倍截图给用户扫；登录态存 `~/.config/gzh-md-compose-push/mp_profile/Default/Network/Cookies`，**绝不写进技能目录**，分享/同步技能前确认技能目录无此目录（含完整后台登录态）。
-- **正文注入**：编辑器是 ProseMirror（`.mock-iframe-body .ProseMirror`，2026 版无 iframe）。脚本路径走 `clipboard.write(text/html)` + `Cmd+V`（mac）/ `Control+V` + 点「继续插入」。工具路径若 `press_key` 粘贴不触发（chrome-devtools CLI 实测会只剩占位符），改用 evaluate_script 的 `execCommand('selectAll'/'delete'/'insertHTML', html)`——2026-11-26 实测 24 万字符 HTML / 1 图保存重开核验通过。始终禁止合成 paste 事件与直接改 innerHTML。
+- **正文注入**：编辑器是 ProseMirror（`.mock-iframe-body .ProseMirror`，2026 版无 iframe）。脚本路径走 `clipboard.write(text/html)` + `Cmd+V`（mac）/ `Control+V` + 点「继续插入」。工具路径若 `press_key` 粘贴不触发（chrome-devtools CLI 实测会只剩占位符），可用 evaluate_script 的 `execCommand('selectAll'/'delete'/'insertHTML', html)` 写入正文——但 **2026-11-27 实测保存后微信会剥离代码块里的彩色 span**（注入 2434 个、重开剩 152 个），**含代码高亮的文章必须走脚本路径**（保存后 1862 个高亮 span 全保留），insertHTML 仅限无代码块文章兜底。始终禁止合成 paste 事件与直接改 innerHTML。
 - **只存草稿**：`mp_full.py` 的 `click_text` 内置「发表/群发/发布」黑名单，杜绝误点。
 - 其它踩坑见 `references/mp-wechat-notes.md`（封面悬停菜单、图片库真实点击、ProseMirror-separator、短文章判据等）。
 

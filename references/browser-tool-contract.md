@@ -11,6 +11,7 @@
 | chrome-devtools MCP / CLI（独立开源项目，多数 Agent 由此获得浏览器能力） | MCP 工具：`new_page` / `navigate_page` / `take_snapshot` / `evaluate_script` / `click` / `press_key` / `upload_file` / `take_screenshot` | ✅ 最合适：能执行 JS、能上传文件、有独立持久化 profile |
 | chrome-devtools-cli skill            | shell 命令：`chrome-devtools evaluate_script ...`、`upload_file`、`press_key` 等 | ✅ 与 MCP 等价，适合脚本化执行      |
 | computer-use 类工具                  | 截图 + 坐标点击 + 键盘                        | ⚠️ 可做，但慢且脆，**不要用坐标做正文注入** |
+| 文章含代码块（需代码高亮）           | 必须真实剪贴板粘贴                            | ❌ 工具路径的 `insertHTML` 保存后会被微信剥离高亮，退回 `mp_*.py` |
 | 无任何浏览器工具                     | —                                             | ❌ 退回技能自带 `mp_*.py`（patchright） |
 
 探测按**能力**判断，不按工具名字。先列出宿主暴露的工具 / 已装 skill / MCP server 配置，再逐项核对六项必需能力：
@@ -73,7 +74,7 @@
 4. 轮询最多 8 秒，若出现「内容结构检测」弹窗（`.weui-desktop-dialog`），点「继续插入」——不点内容会被静默丢弃；
 5. 读 `.mock-iframe-body` 的 `innerText.length`，按 HTML 预期非空白字符数的 0.7 倍作下限（下限最小 20）；不达标则清空重试一次。
 
-**工具路径的实测修正（2026-11-26）**：chrome-devtools CLI 在无头/有头下 `press_key` 发 `Cmd+V` / `Ctrl+V` 都不触发原生粘贴（正文只剩 10 字占位符），即使 `navigator.clipboard.write` 返回成功。此时改用同一 `evaluate_script` 里的 `document.execCommand('selectAll')` + `document.execCommand('delete')` + `document.execCommand('insertHTML', false, html)`（先真实点击编辑器取得焦点），实测 24 万字符 HTML / 1 图 / 21458 字正文保存并重开核验通过。仍**禁止**合成 `ClipboardEvent('paste')` 和直接改 `innerHTML`；`insertHTML` 仅在工具路径的 evaluate_script 中作为备选，脚本路径继续走剪贴板。也**不要自己算坐标点击**：正文可高达数千像素，`scrollIntoView` 后坐标可能为负；用工具的 DOM 定位 / 选择器点击。
+**工具路径的实测修正（2026-11-26，2026-11-27 补充关键限制）**：chrome-devtools CLI 在无头/有头下 `press_key` 发 `Cmd+V` / `Ctrl+V` 都不触发原生粘贴（正文只剩 10 字占位符），即使 `navigator.clipboard.write` 返回成功。此时可在同一 `evaluate_script` 里用 `document.execCommand('selectAll')` + `document.execCommand('delete')` + `document.execCommand('insertHTML', false, html)`（先真实点击编辑器取得焦点）写入全文，正文/图片/章节能保存并重开核验。**但 2026-11-27 实测：注入时 DOM 里代码高亮 span 完整（2434 个），保存后微信后端会把代码块里的彩色 span 全部剥离（重开只剩 152 个非代码块颜色）**——代码高亮必丢。因此**含代码块的文章判定工具路径不满足契约，必须改走 `mp_*.py` 的剪贴板粘贴路径**（实测保存重开后 1862 个代码高亮 span 全保留）；`insertHTML` 仅限无代码块的纯文本文章兜底。仍**禁止**合成 `ClipboardEvent('paste')` 和直接改 `innerHTML`。也**不要自己算坐标点击**：正文可高达数千像素，`scrollIntoView` 后坐标可能为负；用工具的 DOM 定位 / 选择器点击。
 
 ### 5. 正文配图
 

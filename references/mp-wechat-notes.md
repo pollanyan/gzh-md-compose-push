@@ -16,7 +16,7 @@
 
 - 没有 iframe（老教程 `#ueditor_0` 已废弃）。正文 `.mock-iframe-body .ProseMirror`；标题 `.title-editor__input .ProseMirror`；署名 `input#author`；摘要 `textarea#js_description`。
 - 填 HTML 唯一可靠路径：真实点击聚焦 → `ctx.grant_permissions(['clipboard-read','clipboard-write'], origin='https://mp.weixin.qq.com')` → `navigator.clipboard.write` 写 `text/html` → `Cmd+V`（macOS）/ `Control+V`（Windows/Linux）。修饰键必须按平台选——2026-11-25 实测 mac 上 Control+V 不触发粘贴（注入只剩 10 字符），Control+A 也不全选。
-  无效做法：合成 `ClipboardEvent('paste')`、直接改 `innerHTML`。`execCommand('insertHTML')` 在 patchright 脚本路径实测无效，但 **chrome-devtools 工具路径的 evaluate_script 里实测有效**（2026-11-26，`press_key` 粘贴失效时的备选，需先真实点击编辑器聚焦）；见 `browser-tool-contract.md`。
+  无效做法：合成 `ClipboardEvent('paste')`、直接改 `innerHTML`。`execCommand('insertHTML')` 在 patchright 脚本路径实测无效；chrome-devtools 工具路径的 `evaluate_script` 里能写入正文，但 **2026-11-27 实测保存后微信后端会剥离代码块里的彩色 span**（注入时 2434 个、重开只剩 152 个非代码块颜色），**含代码高亮的文章必须走剪贴板粘贴的脚本路径**（保存后 1862 个代码高亮 span 全保留）；`insertHTML` 仅限无代码块的纯文本文章兜底。见 `browser-tool-contract.md`。
 - 粘贴后可能弹「内容结构检测」，必须点「继续插入」，否则内容被静默丢弃（不是每次都弹，轮询 8 秒）。
 - 结构检测两条硬规则：文字背景禁渐变（CTA 用纯色）；`line-height` 不能小于 `font-size`（19px→1.45、17px→1.55、14/13px→1.6）。
 - 不要手算点击坐标（正文可高 5000+px，scrollIntoView 后 rect.y 为负）；用 `pg.click(selector)` 让 Playwright 算。
