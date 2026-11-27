@@ -3,7 +3,7 @@
 """生成 README 用的主题效果图（每套主题浅色 + 深色两张 PNG）。
 
 用法:
-    python gen_theme_images.py [--md assets/themes/demo.md] [--out assets/themes]
+    python gen_theme_images.py [--md assets/demo.md] [--out assets]
 
 机制:
   - 浅色图 = 主题原样渲染；深色图 = wechat_dark（微信读者端 mp-darkmode
@@ -88,8 +88,8 @@ def shoot(page_html, out_path):
 def main():
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--md", default=os.path.join(BASE, "..", "assets", "themes", "demo.md"))
-    ap.add_argument("--out", default=os.path.join(BASE, "..", "assets", "themes"))
+    ap.add_argument("--md", default=os.path.join(BASE, "..", "assets", "demo.md"))
+    ap.add_argument("--out", default=os.path.join(BASE, "..", "assets"))
     args = ap.parse_args()
     md = open(args.md, encoding="utf-8").read()
     out_dir = os.path.abspath(args.out)

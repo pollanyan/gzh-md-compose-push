@@ -2,10 +2,18 @@
 name: gzh-md-compose-push
 display_name: 公众号 Markdown 排版推送
 display_name_en: GZH Markdown Compose & Push
-description: "本技能用于将 Markdown 排版成微信公众号 HTML 并推送到草稿箱，内置浏览器扫码（默认，无需凭证）与官方 API（可选，需 AppID/AppSecret）双通道。提供 6 套主题预览、代码高亮、图片/封面上传、草稿覆盖与回读核验，并遵循三段式确认（排版方案→确认→本地文件→确认→推送）。当用户要求『公众号排版』『把 Markdown 转公众号格式』『推到公众号草稿箱』『发公众号但不想用 AppID』『个人公众号推草稿』，或明确要求『用 API/接口方式推送』时，应使用本技能。"
-description_zh: "将 Markdown 排版成公众号 HTML 并推送到草稿箱：6 主题深浅配色、扫码/API 双通道、插图自动上传、合规校验。"
-description_en: "Compose Markdown into styled WeChat Official Account HTML and push it to the draft box: 6 themes with light/dark schemes, QR/API channels, auto image upload, and compliance validation."
-author: pollanyan
+description: "把 Markdown 与 Obsidian 笔记排版成公众号 HTML，并推送到公众号草稿箱：6 套主题（深浅两版）、本地与网络图片上传、代码高亮、Obsidian Callout 渲染。默认微信扫码免 AppID，可选官方 API（需 AppID/AppSecret）；排版方案→本地预览→推送草稿箱三段确认，全程可控。只写草稿，绝不代发布。"
+description_zh: "把 Markdown 与 Obsidian 笔记排版成公众号 HTML，并推送到公众号草稿箱：6 套主题（深浅两版）、本地与网络图片上传、代码高亮、Obsidian Callout 渲染。默认微信扫码免 AppID，可选官方 API（需 AppID/AppSecret）；排版方案→本地预览→推送草稿箱三段确认，全程可控。只写草稿，绝不代发布。"
+description_en: "Turn Markdown and Obsidian notes into styled WeChat HTML and push to the draft box — six themes in light and dark variants, local and web image upload, syntax highlighting, and native Obsidian callout rendering. WeChat QR login by default with no AppID required; official API is optional (AppID/AppSecret). Three-step confirmation — layout plan, local preview, draft push — keeps you in control. Drafts only; never published on your behalf."
+examples_zh:
+  - "把这篇 Markdown 排版成公众号文章，先看石墨极简风预览"
+  - "把这篇 Obsidian 笔记排版成公众号文章，先看石墨极简风预览"
+  - "把改好的稿子覆盖到原来那篇公众号草稿"
+examples_en:
+  - "Format this Markdown into a WeChat article and show me a graphite-minimal preview first"
+  - "Format this Obsidian note into a WeChat article and show me a graphite-minimal preview first"
+  - "Overwrite the existing WeChat draft with my revised article"
+author: 严宝亮
 version: 1.0.0
 license: MIT
 agent_created: true

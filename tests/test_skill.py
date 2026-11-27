@@ -364,9 +364,10 @@ class RepoHygieneTests(unittest.TestCase):
         for d in ("scripts", "references", "templates", "assets", "doc"):
             self.assertTrue(os.path.isdir(os.path.join(ROOT, d)), d)
         self.assertTrue(re.search(r"^name:\s*gzh-md-compose-push\b", self.skill_md, re.M))
-        themes = [f for f in os.listdir(os.path.join(ROOT, "assets", "themes"))
+        themes = [f for f in os.listdir(os.path.join(ROOT, "assets"))
                   if f.endswith(".png")]
         self.assertEqual(len(themes), 12)
+        self.assertFalse(os.path.isdir(os.path.join(ROOT, "assets", "themes")))
 
     def test_readme_local_links_exist(self):
         paths = re.findall(r"\]\((?!https?://|#)([^)]+)\)", self.readme)

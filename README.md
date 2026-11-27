@@ -57,21 +57,21 @@
 | 主题                                                                                                                          | 适合的文章                                             |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **摸鱼绿**（moyu-green）                                                                                                      | 教程、测评、清单、工具盘点                             |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/moyu-green_dark.png"><img src="assets/themes/moyu-green.png" alt="摸鱼绿主题效果"></picture> | 绿色主色，明快、亲和                                   |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/moyu-green_dark.png"><img src="assets/moyu-green.png" alt="摸鱼绿主题效果"></picture> | 绿色主色，明快、亲和                                   |
 | **红白色系**（red-white）                                                                                                     | 深度分析、观点、有力量感的话题                         |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/red-white_dark.png"><img src="assets/themes/red-white.png" alt="红白色系主题效果"></picture> | 红色主色，醒目、有冲击力                               |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/red-white_dark.png"><img src="assets/red-white.png" alt="红白色系主题效果"></picture> | 红色主色，醒目、有冲击力                               |
 | **石墨极简风**（graphite-minimal）                                                                                            | 设计、科技评论、专业观点、高端品牌，也是本技能默认主题 |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/graphite-minimal_dark.png"><img src="assets/themes/graphite-minimal.png" alt="石墨极简风主题效果"></picture> | 灰黑主色，克制、留白多                                 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/graphite-minimal_dark.png"><img src="assets/graphite-minimal.png" alt="石墨极简风主题效果"></picture> | 灰黑主色，克制、留白多                                 |
 | **留白禅意风**（zen-whitespace）                                                                                              | 禅意、极简生活、深度随笔、艺术留白                     |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/zen-whitespace_dark.png"><img src="assets/themes/zen-whitespace.png" alt="留白禅意风主题效果"></picture> | 墨绿主色，疏朗、安静                                   |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/zen-whitespace_dark.png"><img src="assets/zen-whitespace.png" alt="留白禅意风主题效果"></picture> | 墨绿主色，疏朗、安静                                   |
 | **摸鱼票据风**（moyu-ticket）                                                                                                 | 测评、工具对比、创意评测                               |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/moyu-ticket_dark.png"><img src="assets/themes/moyu-ticket.png" alt="摸鱼票据风主题效果"></picture> | 绿色主色、票据式分隔线                                 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/moyu-ticket_dark.png"><img src="assets/moyu-ticket.png" alt="摸鱼票据风主题效果"></picture> | 绿色主色、票据式分隔线                                 |
 | **橄榄手记**（olive-journal）                                                                                                 | 内刊手记、深度评测、案例复盘                           |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/themes/olive-journal_dark.png"><img src="assets/themes/olive-journal.png" alt="橄榄手记主题效果"></picture> | 深色文字配橙色点缀，像笔记本                           |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/olive-journal_dark.png"><img src="assets/olive-journal.png" alt="橄榄手记主题效果"></picture> | 深色文字配橙色点缀，像笔记本                           |
 
 挑主题时不必记住标识：直接说「用石墨极简风」或「换成留白禅意风，要深色」就行。想看自己文章在各主题下的样子，可以让 Agent 一次生成全部主题×配色的预览页再选。
 
-> 效果图由 `scripts/gen_theme_images.py` 生成（示例文章源码在 `assets/themes/demo.md`）：浅色图为主题原样渲染，深色图按微信读者端 Dark Mode 转换算法（`wechatjs/mp-darkmode`）模拟。主题调整后运行该脚本即可重新生成 12 张图。
+> 效果图由 `scripts/gen_theme_images.py` 生成（示例文章源码在 `assets/demo.md`）：浅色图为主题原样渲染，深色图按微信读者端 Dark Mode 转换算法（`wechatjs/mp-darkmode`）模拟。主题调整后运行该脚本即可重新生成 12 张图。
 
 **浅色 / 深色两种配色方案**：浅色是白底深字（经典样式）。读者开深色模式时，**微信客户端会用官方转换算法自动把文章转成深色观感**（白底变深底、深字变浅字、品牌色相保留）——公众号的深浅自适配就是这条机制，作者只需按官方最佳实践写颜色；本技能的主题颜色全部 HEX 格式、对比度适中、无文字背景渐变，深色下自动可读。深色配色方案则是**写死的深色卡片**：无论读者系统怎么设都固定显示深底浅字，适合确定读者偏好深色的场景。预览页自带同样的深浅自适应：跟随浏览器/系统明暗自动切换深浅观感，也可点预览页工具栏的 🌗 按钮手动切换（自动/深/浅）。
 
@@ -528,7 +528,8 @@ gzh-md-compose-push/
 │   └── article_template.py         # 扫码通道的文章信息模板
 ├── assets/
 │   ├── preview-template.html       # 预览页外壳
-│   └── themes/                     # 本 README 中六套主题的效果示意图
+│   ├── demo.md                     # 主题效果图的示例文章源码
+│   └── *.png                       # 12 张主题效果图（6 主题 × 深浅配色，平铺以符合平台两级目录约束）
 └── references/
     ├── user-conventions.md         # 排版特殊约定（技能内部必读）
     ├── browser-tool-contract.md    # 扫码通道：复用 Agent 浏览器操作能力的操作契约（工具无关）
