@@ -9,6 +9,8 @@
 环境变量：
   MP_LOGIN_WAIT   等扫码的秒数，默认 900（15 分钟）。登录成功会立刻返回，不会白等。
   MP_HEADLESS     1=无头（默认）；0=有头，调试时用来看界面。
+  GZH_MP_RUNTIME  运行时目录（默认 ~/.config/gzh-md-compose-push），登录态、二维码、
+                  日志都放这里，不落进技能目录，避免安装副本夹带 Cookies。
 
 说明：
   微信后台编辑器的正文是 ProseMirror（在 .mock-iframe-body 内，不是 iframe），
@@ -33,11 +35,16 @@ except ImportError:
     )
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-PROFILE = os.path.join(BASE, "mp_profile")
-QR_OUT = os.path.join(BASE, "mp-login-qrcode.png")
-QR_BIG = os.path.join(BASE, "mp-login-qrcode-big.png")
-LOG = os.path.join(BASE, "mp_full.log")
-SHOT = os.path.join(BASE, "mp-shot-%s.png")
+# 登录态 / 二维码 / 日志 / 调试截图全部放用户配置区，技能目录保持干净：
+# 安装、同步、分享技能时不会把公众号 Cookies 一起带走（2026-11-26 复查强化）。
+RUNTIME = os.path.abspath(os.environ.get(
+    "GZH_MP_RUNTIME", os.path.expanduser("~/.config/gzh-md-compose-push")))
+os.makedirs(RUNTIME, exist_ok=True)
+PROFILE = os.path.join(RUNTIME, "mp_profile")
+QR_OUT = os.path.join(RUNTIME, "mp-login-qrcode.png")
+QR_BIG = os.path.join(RUNTIME, "mp-login-qrcode-big.png")
+LOG = os.path.join(RUNTIME, "mp_full.log")
+SHOT = os.path.join(RUNTIME, "mp-shot-%s.png")
 
 MP_HOME = "https://mp.weixin.qq.com/"
 NEW_TPL = ("https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit"

@@ -6,7 +6,7 @@
 
 | 组件 | 类型 | 认证方式 | 排版能力 | 限制 | 满足本次需求 |
 |---|---|---|---|---|---|
-| 本技能 gzh-md-compose-push | Skill | **个人微信扫码**（独立 profile） | 6 主题 + 代码高亮 + 预览 | 首次需扫码；需 patchright+chromium | ✅ 全部 |
+| 本技能 gzh-md-compose-push | Skill | **个人微信扫码**（独立 profile） | 6 主题 + 代码高亮 + 预览 | 首次需扫码；工具路径零驱动，脚本路径需 patchright（复用系统 Chrome） | ✅ 全部 |
 | gzh-layout-pro 公众号排版设计专家 | Expert | 无（只排版） | 6 主题组件库、校验器、主题预览生成、章节编号 | 不推送；需人工复制粘贴 | 仅排版 |
 | wechat-draft-publisher | Skill | AppID/AppSecret + IP 白名单 | 无（只推送现成 HTML） | 个人未认证号报 48001；作者名默认写死 | 仅推送 |
 | wxmp-draft-publisher 公众号发布·斑马 | Connector | OAuth 一次填 AppID/Secret（云端固定 IP） | 无 | 仍依赖 AppID；IP 白名单 | 否 |

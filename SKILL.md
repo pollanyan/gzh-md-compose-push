@@ -26,7 +26,7 @@ agent_created: true
 
 **硬边界（务必先与用户对齐）：**
 - 只写**草稿箱**，**绝不点「发表/群发/发布」**——发布权永远留给用户。
-- 用技能自带的独立浏览器 profile（`scripts/mp_profile/`），与用户日常 Chrome 登录态**不共享**；第一次或登录态过期时必须扫码。
+- 脚本路径用独立的浏览器 profile（`~/.config/gzh-md-compose-push/mp_profile`，可用 `GZH_MP_RUNTIME` 改目录），与用户日常 Chrome 登录态**不共享**、也不放进技能目录；第一次或登录态过期时必须扫码。
 - 三段式确认，每段都要等用户明确同意才进入下一段，**不得一口气跑完**：
   1. 排版方案（主题选哪套 + 章节结构）→ 用户确认
   2. 生成本地 HTML + 预览页 → 用户确认满意
@@ -36,6 +36,7 @@ agent_created: true
 
 ```
 scripts/
+  obsidian_preprocess.py  # Obsidian 稿预处理：frontmatter/callout/wiki链接/块嵌入 → 纯净 Markdown
   md_to_gzh.py            # Markdown→公众号 HTML（6 主题 + 代码高亮 + 合规）
   validate_gzh_html.py    # 平台合规校验（ERROR 必须清零）
   wrap_preview.py         # 生成带「复制到公众号」按钮的预览页
@@ -54,7 +55,7 @@ assets/
   preview-template.html   # wrap_preview.py 依赖的预览外壳
 references/
   user-conventions.md     # 用户排版特殊约定（超链接/角标/三层/列宽/来源/高亮）★ 必读
-  browser-tool-contract.md # 扫码通道契约：把后台操作翻译成 Agent 自带浏览器工具调用 ★ 扫码必读
+  browser-tool-contract.md # 扫码通道契约：把后台操作翻译成 Agent 浏览器工具调用（多数是 chrome-devtools-mcp）★ 扫码必读
   mp-wechat-notes.md      # 微信编辑器踩坑清单（粘贴/封面/图片/核验）
   ecosystem-survey.md     # 本次生态盘点与方案对比
 doc/
@@ -69,8 +70,8 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
 依赖按需触发，不要预先手工安装：
 
 - 纯排版 / 校验 / 预览的三个脚本只用标准库，**零依赖**。
-- **扫码通道优先复用 Agent 自带的浏览器工具**，按 `references/browser-tool-contract.md` 的精确契约执行：推送前先探测宿主暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。
-- 只有宿主没有任何浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」时，才改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
+- **扫码通道优先复用 Agent 的浏览器操作能力**，按 `references/browser-tool-contract.md` 的精确契约执行：多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备该能力，也可能是宿主预装的其他等价工具、技能或插件；浏览器工具属于 Agent 侧能力，不绑定某个宿主。推送前先探测当前环境暴露的浏览器工具（MCP / skill / CLI 均可），**按能力适配**——能导航、能执行页面 JS、能发真实按键、能上传文件、有独立持久化 profile——再把契约里的 URL / 选择器 / JS / 判据翻译成该工具的具体调用。这条路不需要 patchright。
+- 只有 Agent 没有任何满足契约的浏览器工具、或其接口做不到「写 text/html 剪贴板 + 发 Ctrl+V + 上传文件 + 独立持久化 profile」时，才改用技能自带的 `mp_*.py` 脚本路径：它们依赖 `patchright`（几 MB 驱动库，缺失时脚本会提示 `python3 -m pip install patchright`），浏览器内核自动探测系统已装 Chrome/Edge/Chromium，普通用户无需预下载 Chromium。
 - API 通道：`wx_api_publish.py` 纯标准库，只需凭证。
 
 两种扫码执行器跑的是**同一份契约**（见 `references/browser-tool-contract.md`），差别只在调用方式：工具路径由 Agent 调 MCP / CLI 接口，脚本路径由 patchright 实现同一组单元。不要把「用 Agent 工具」当成自然语言自由发挥——每一步的 URL、选择器、JS、判据都是写死的。
@@ -82,17 +83,25 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
 ### 第 1 步：排版方案（先确认，不落地）
 
 1. 读取用户的 Markdown（路径或正文）。
-2. **插图预处理**：若 Markdown 含 `![...](...)`，先上传图片并替换地址；本地路径、http/https 地址、data URI 都支持：
+2. **Obsidian 稿预处理**（仅当源文件来自 Obsidian / 含其专有语法时）：
    ```bash
-   python3 <SKILL>/scripts/upload_md_images.py <article.md> -o <article>_微信图.md
+   python3 <SKILL>/scripts/obsidian_preprocess.py <article.md> -o <article>_纯净.md
    ```
-   这一步会调用 `mp_imglib_upload.py` 上传图片库并写出新 Markdown，后续排版一律用输出文件。没有插图时脚本原样写出。
-3. **主题预览**：先跑一次生成全部主题的预览页，让用户直观挑选：
+   处理 YAML frontmatter（title 单独写成 `<!-- gzh-title: ... -->` 标记行，正文的 `#`
+   全部按章节渲染）、`> [!tip]` callout、`[[wiki]]` 链接、`![[文件#块]]` 嵌入展开；
+   超链接与图片行原样保留，由排版器统一收 reference。
+   不是 Obsidian 稿可跳过，直接用原文件做下一步。
+3. **插图预处理**：若 Markdown 含 `![...](...)`，先上传图片并替换地址；本地路径、http/https 地址、data URI 都支持：
+   ```bash
+   python3 <SKILL>/scripts/upload_md_images.py <article>_纯净.md -o <article>_微信图.md
+   ```
+   （非 Obsidian 稿把输入换成 `<article.md>`。）这一步会调用 `mp_imglib_upload.py` 上传图片库并写出新 Markdown，后续排版一律用输出文件。没有插图时脚本原样写出。
+4. **主题预览**：先跑一次生成全部主题的预览页，让用户直观挑选：
    ```bash
    python3 <SKILL>/scripts/md_to_gzh.py <article>_微信图.md --all-themes --preview-dir <工作区>/themes
    ```
    打开 `<工作区>/themes/index.html`，列出 6 套主题（摸鱼绿/红白色系/石墨极简风/留白禅意风/摸鱼票据风/橄榄手记），每套均有 浅色/深色 两种配色预览，请用户选一套（主题 + 配色）。用户偏好深色阅读时推荐 `--scheme dark`（写死的深底浅字卡片，读者任何模式下都稳定）。
-4. 用 AskUserQuestion 给出：主题选项 + 章节结构概述 + **封面来源三选一**（这是封面唯一一次收集，之后不再追问）：
+5. 用 AskUserQuestion 给出：主题选项 + 章节结构概述 + **封面来源三选一**（这是封面唯一一次收集，之后不再追问）：
    - **① 自行提供封面**：用户可直接贴图、给本地文件路径或网络 URL——贴图/URL 先落成本地文件，再统一走 `cover_prepare.py` 归一化（中心裁剪 2.35:1 → 900×383）；
    - **② AI 自动生成封面**：按文章主题与所选配色生成提示词（无文字、构图主体居中、用主题强调色作点缀），调用图像生成能力产出后**必须**用 `cover_prepare.py` 归一化——生成图右下角的「AI生成」水印在底边，中心裁剪 2.35:1 后必然被去掉。**图像生成消耗额外额度（约 5–10 积分/张），询问前告知用户**；用户不满意可换构图重新生成。
    - **③ 不加封面**：草稿封面留空，后续可在公众号后台单独补。
@@ -103,7 +112,7 @@ requirements.txt          # patchright（仅扫码脚本路径需要，纯排版
    用户提交后**立即** `push_config.py set author "<署名>"` 持久化，并告知「下次推送自动使用，随时可改」；用户跳过则配置保持不变（回退默认 = 署名留空）。文章模块的 `AUTHOR` 由模板自动从配置读取，无需手填。
 
    选 ①② 时封面文件在确认推送前准备好，推送时直接使用；选 ③ 则推送时不带 `--cover`。
-5. **停下等用户确认**。未确认前不生成最终文件。
+6. **停下等用户确认**。未确认前不生成最终文件。
 
 ### 第 2 步：生成本地文件（再确认）
 
@@ -116,6 +125,7 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 ```
 
 - 校验有 ERROR 就回转换器修，不得交付带 ERROR 的产物。
+- **预览页只生成一个**：`wrap_preview.py` 默认产物已自带深浅自适应（跟随系统明暗 + 🌗 手动切换），**不要**再跑 `--dark` 生成第二个「_预览_深色.html」文件（2026-11-26 用户明确：单个文件已够，多文件冗余）。`--dark` 仅用于 `--scheme dark`（写死深底浅字）文章的强制深色快照，非常规交付物。
 - 把 `_预览.html` 用 present_files 打开给用户看，并说明：代码块是**每行一个 leaf + 行内彩色 span**（这是修正过的关键点——早期逐 token 一个 leaf 会被公众号拆行、缩进错位）。
 - **停下等用户确认满意**。不满意就回到第 1 步重来（换主题/改结构），不推送。
 
@@ -123,7 +133,7 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 
 用户确认本地文件后，先按 `references/browser-tool-contract.md` 探测宿主浏览器工具，决定执行器：
 
-- **有浏览器工具**：按契约第一节的能力清单适配（任何接口等价的 MCP / skill / CLI 都行），用该工具的接口执行登录、写标题、正文注入、上传图片、保存、设封面、回读核验；每一步的判据与「必读」踩坑清单一致。不装 patchright。
+- **有浏览器工具**：按契约第一节的能力清单适配（任何接口等价的 MCP / skill / CLI 都行，不挑宿主，多数是 chrome-devtools-mcp），用该工具的接口执行登录、写标题、正文注入、上传图片、保存、设封面、回读核验；每一步的判据与「必读」踩坑清单一致。不装 patchright。
 - **无浏览器工具或接口不满足契约**（不能写 text/html 剪贴板、不能上传文件、无独立 profile）：用下面的 `mp_*.py` 脚本路径。
 
 1. **先问覆盖还是新建**（这是重复推送的必问项）：
@@ -169,23 +179,27 @@ python3 <SKILL>/scripts/wrap_preview.py <上面.html>               # 产出 _�
 ## 必读 reference：`references/user-conventions.md`
 
 生成任何 HTML 前先读它。里面固化了用户多轮返工后的硬约定，转换器已按此实现：
-- 正文**零超链接**，来源走「附：取证来源」大章节 + References 纯文本 URL；
+- 正文**零超链接**：任何章节的链接都换成文字 + `[[N]]` 角标，全篇统一编号，
+  URL 收进文末「附：取证来源」大章节 + References 纯文本 URL；
+- 文章标题单独取（Obsidian frontmatter → `<!-- gzh-title: -->` 标记；旧稿取首个 `#`）；
+  章节按正文实际标题级别判定：有 `#` 用 `#` 分章，否则用 `##` 分章；代码块里的 `#` 不算标题；
 - `[[N]]` → `#2563EB` 蓝色 **右上角上标**（`vertical-align:super; font-size:10px`）；
 - 三层对照用「图 + 强/平/弱状态表」（强=已覆盖/更优、平=有边界差异、弱=不可插件化）；
-- 表格按内容比例列宽（`<colgroup>` + `table-layout:fixed`），**不无脑加宽**，表头无底色、全左对齐；
-- 行内代码蓝色 `#2563EB` 无底色；正文每段 1–3 处下划线标记；章节 44px 大编号 + 英文标签；
+- 表格按内容比例列宽（`table-layout:fixed` + `width="%"` 属性 + `min-width:620px`），**不无脑加宽**，表头无底色、居中加粗，正文左对齐，窄屏可横滑；
+- 行内代码蓝色 `#2563EB` 无底色；正文每段 1–3 处下划线标记；章节 44px 大编号 + 英文标签，
+  小章节标题无竖线；引用块用浅灰背景块（浅 `#F5F5F5` / 深 `#383838`）+ 柔和左侧细线；
 - 签名区不写死人名（用占位或用户给的署名），仅末尾一处。
 
 ## 关键实现依据（修复的坑）
 
 - **代码高亮拆行 bug**：公众号把每个 `<span leaf>` 当原子节点重排。逐 token 一个 leaf 会让 `export const X = [` 被拆成 5 行、缩进错位、行距撑大。`md_to_gzh.py` 改为**每行一个 leaf，行内用不带 leaf 的彩色 span**，颜色保留且排版稳定。校验器已验证合规。**绝不改回图片方案**（用户明确否决）。
-- **扫码登录**：patchright（Playwright stealth 分支）+ 独立 Chromium profile，二维码是 `.login__type__container__scan__qrcode`，放大 4 倍截图给用户扫；登录态存 `scripts/mp_profile/Default/Network/Cookies`，**分享技能前必须删除此目录**（含完整后台登录态）。
-- **正文注入**：编辑器是 ProseMirror（`.mock-iframe-body .ProseMirror`，2026 版无 iframe）。唯一可靠的 HTML 注入方式是 `clipboard.write(text/html)` + `Control+V` + 点「继续插入」；合成 paste 事件/insertHTML/改 innerHTML 都无效。
+- **扫码登录**：patchright（Playwright stealth 分支）+ 独立 Chromium profile，二维码是 `.login__type__container__scan__qrcode`，放大 4 倍截图给用户扫；登录态存 `~/.config/gzh-md-compose-push/mp_profile/Default/Network/Cookies`，**绝不写进技能目录**，分享/同步技能前确认技能目录无此目录（含完整后台登录态）。
+- **正文注入**：编辑器是 ProseMirror（`.mock-iframe-body .ProseMirror`，2026 版无 iframe）。脚本路径走 `clipboard.write(text/html)` + `Cmd+V`（mac）/ `Control+V` + 点「继续插入」。工具路径若 `press_key` 粘贴不触发（chrome-devtools CLI 实测会只剩占位符），改用 evaluate_script 的 `execCommand('selectAll'/'delete'/'insertHTML', html)`——2026-11-26 实测 24 万字符 HTML / 1 图保存重开核验通过。始终禁止合成 paste 事件与直接改 innerHTML。
 - **只存草稿**：`mp_full.py` 的 `click_text` 内置「发表/群发/发布」黑名单，杜绝误点。
 - 其它踩坑见 `references/mp-wechat-notes.md`（封面悬停菜单、图片库真实点击、ProseMirror-separator、短文章判据等）。
 
 ## 安全
 
-- 登录态目录 `scripts/mp_profile/` 是公众号后台完整 Cookies，**绝不外传**；`mp_full.py logout` 一键清除。
+- 登录态目录 `~/.config/gzh-md-compose-push/mp_profile/` 是公众号后台完整 Cookies，**绝不外传**；`mp_full.py logout` 一键清除。二维码与调试截图也只落在该配置目录，不污染技能包。
 - 二维码文件是活码，登录后脚本自动删除；不要手工留存。
 - 校验器 `validate_gzh_html.py` 的 ERROR 必须清零；WARNING 也要检查到 0（半角标点在代码区内豁免）。

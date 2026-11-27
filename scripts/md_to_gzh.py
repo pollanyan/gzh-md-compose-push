@@ -16,6 +16,8 @@
      导致一行被拆成多行、缩进错位、行距撑大。每行单 leaf 可避免。
   2. 缩进用 &nbsp; 放在 leaf 内（保住宽度），字体 Courier New，
      line-height 1.6，不用 white-space:pre / class。
+     长行用 white-space:nowrap（微信默认 break-spaces 会强行折行）+ 外层
+     overflow-x:auto 支持左右滑动，微信编辑器实测两者都保留。
   3. 正文中文必须包 leaf；中文标点全角；代码/URL/英文专名原样。
   4. 所有样式内联，禁 style/script/div/class/id/position/float/grid/CSS 变量。
 """
@@ -89,11 +91,16 @@ def cspan(txt, color):
 
 
 def code_line(line, lang, t=None):
-    """把一行代码转成「一个 leaf」：缩进 &nbsp; + 行内彩色 span。"""
+    """把一行代码转成「一个 leaf」：缩进 &nbsp; + 行内彩色 span。
+
+    white-space:nowrap —— 微信编辑器默认把 p 设成 break-spaces（长代码行
+    被强行折行，2026-11-26 用户手机实测反馈）；nowrap 让行保持单行，
+    配合外层 overflow-x:auto 实现左右滑动查看（微信探针实证两者都保留）。
+    """
     lead = len(line) - len(line.lstrip(" "))
     indent = "&nbsp;" * lead
     inner = _highlight(line[lead:], lang, t)
-    return '<p style="margin:0;font-family:Courier New,monospace;font-size:13px;line-height:1.6;">' \
+    return '<p style="margin:0;font-family:Courier New,monospace;font-size:13px;line-height:1.6;white-space:nowrap;">' \
            '<span leaf="">%s%s</span></p>' % (indent, inner)
 
 
@@ -135,7 +142,10 @@ def _highlight(line, lang, t=None):
 
 
 def code_block(code, lang="text", title="", t=None):
-    head = ('<section style="margin:0 10px 22px;border:1px solid %s;border-left:3px solid %s;">'
+    # overflow-x:auto：长代码行 nowrap 后产生横向溢出 → 可左右滑动查看；
+    # 微信 ProseMirror 保留该声明（探针实证：父 section overflowX=auto，
+    # scrollWidth 1237 > clientWidth 554）。2026-11-26 用户手机实测后加。
+    head = ('<section style="margin:0 10px 22px;border:1px solid %s;border-left:3px solid %s;overflow-x:auto;">'
             % (t["line"], t["primary"]))
     if title:
         head += ('<section style="padding:7px 14px;border-bottom:1px solid %s;">'
@@ -151,6 +161,16 @@ def code_block(code, lang="text", title="", t=None):
 # ───────────────────────── 行内标记 ─────────────────────────
 BLUE = "#2563EB"  # 行内代码/引用角标专用蓝（用户指定，无底色）
 
+# Obsidian 预处理把 frontmatter title 单独写成这一行；正文里不再插 # 标题。
+TITLE_MARK = re.compile(r"^<!--\s*gzh-title:\s*(.*?)\s*-->\s*$", re.I)
+# 全篇统一收集超链接：任何章节的 [文字](URL) / 裸 URL 都进「附：取证来源」。
+MD_LINK = re.compile(r"(?<!!)\[([^\]]+)\]\((https?://[^)]+)\)")
+BARE_URL = re.compile(r"(?<![\w(<])(https?://[^\s)）\]>,，。；;]+)")
+REF_LINE = re.compile(r"^\[(\d+)\]\s*(.+?)[:：]\s*(https?://\S+)\s*$")
+REF_ITEM = re.compile(r"^[-*]\s+\[[^\]]+\]\((https?://[^)]+)\)\s*$")
+APPENDIX_HEAD = re.compile(r"^#{1,3}\s+(?:\d+(?:\.\d+)*\s+)?附[：:]?\s*取证来源")
+
+
 def ref_sup(n, t=None):
     """正文引用角标 [[N]] → 蓝色上标（右上角，font-size:10px）。
        明暗自适应主题用 #3B82F6（明暗两底都 readable），其余用 #2563EB。"""
@@ -160,11 +180,30 @@ def ref_sup(n, t=None):
             % (blue, leaf("[%s]" % n)))
 
 
+def _links_to_refs(text, t):
+    """把正文里的 Markdown 链接/裸 URL 换成「文字 + [[N]]」；N 来自全篇统一编号。"""
+    by_url = t.get("_ref_urls") or {}
+
+    def repl(m):
+        n = by_url.get(m.group(2).strip())
+        return m.group(1) + ("[[%s]]" % n if n else "")
+
+    text = MD_LINK.sub(repl, text)
+
+    def bare(m):
+        u = m.group(0).rstrip(".,;:，。；)")
+        n = by_url.get(u)
+        return u + ("[[%s]]" % n if n else "")
+
+    return BARE_URL.sub(bare, text)
+
+
 def inline(text, t):
     """行内标记（全部包 leaf）：
        **加粗** → 主色加粗；`代码` → 蓝色无底色；[[N]] → 蓝色右上标；
        ==高亮== → 主题下划线；普通文本 → leaf。
-       注意：公众号正文不插超链接，URL 一律纯文本走 References 小节。"""
+       注意：公众号正文不插超链接，任何超链接统一换成文字 + 角标，URL 走附录。"""
+    text = _links_to_refs(text, t)
     slots = []
     def stash(rx, kind):
         nonlocal text
@@ -213,23 +252,29 @@ def number_chapter(no, en, title, t, first=False):
             '<h3 style="font-size:20px;font-weight:800;color:%s;margin:0;line-height:1.4;">%s</h3>'
             '</section></section></section>'
             % ("16px" if first else "56px", t["line"], t["line"], leaf(no),
-               t["muted"], leaf(en), t["ink"], leaf(esc(title))))
+               t["muted"], leaf(en), t["ink"], inline(title, t)))
 
 
 def h3(title, t):
+    """小章节标题：不加左侧竖线（2026-11-26 用户反馈与引用块竖线叠在一起别扭）。"""
     return ('<p style="font-size:16px;font-weight:700;color:%s;margin:28px 0 14px;'
-            'padding-left:12px;border-left:3px solid %s;line-height:1.4;">%s</p>'
-            % (t["ink"], t["primary"], leaf(esc(title))))
+            'line-height:1.4;">%s</p>'
+            % (t["ink"], inline(title, t)))
 
 
 def quote_block(text, t, label=None):
-    """引用段：竖线 + 加粗正文。不加任何装饰性英文标签（2026-11-25 用户定稿）；
-    正文走 inline() 行内解析（**加粗**/`行内代码`/角标都要生效，此前只 esc
-    导致 **31** 这类标记原样输出）；text-align 显式 left——微信手机端对未指定
-    段落默认两端对齐，PC 浏览器默认左对齐，不写死三端不一致。"""
-    return ('<section style="border-left:3px solid %s;padding:16px 0 16px 24px;margin:0 10px 28px;">'
+    """引用段：浅灰底 + 柔和左侧细线（照用户给的其他公众号截图，2026-11-26 定稿）。
+    浅色 #F5F5F5 底 / #D4D4D8 细线 / #3F3F3F 字；--scheme dark 时用深灰版本。
+    预览的深色自适配由 wrap_preview 的微信读者端算法自动转色，不需要第二套文件。
+    正文走 inline() 行内解析（**加粗**/`行内代码`/角标都要生效）；text-align 显式 left。"""
+    dark = bool(t.get("code_dark"))
+    bg = "#383838" if dark else "#F5F5F5"
+    bar = "#A1A1AA" if dark else "#D4D4D8"
+    fg = "#A5A5A5" if dark else "#3F3F3F"
+    return ('<section style="background:%s;border-left:2px solid %s;'
+            'padding:14px 16px;margin:0 10px 28px;">'
             '<p style="font-size:16px;font-weight:700;color:%s;margin:0;line-height:1.7;text-align:left;">%s</p>'
-            '</section>' % (t["primary"], t["ink"], inline(text, t)))
+            '</section>' % (bg, bar, fg, inline(text, t)))
 
 
 def image_block(src, alt, t):
@@ -340,10 +385,18 @@ def data_table(rows, t, col_widths=None, status_col=None):
         single = single_line_cols(rows, ncol)
         col_widths = auto_col_widths(rows, ncol, single=single)
     out = ['<section style="margin:0 10px 24px;overflow-x:auto;">',
-           # 不写死 min-width：微信会把表格宽度固化成 min-width 值，手机上
-           # 640px 表格超出 375px 屏 → 首列占比过高（2026-11-25 手机实测）。
-           # 表格宽度按容器自适应，列宽用 width="%" 属性（微信保留且随屏缩放）。
-           '<table style="width:100%%;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">']
+           # 注意：本串**不走 % 格式化**，百分号必须写单个 %（写成 %% 会原样
+           # 输出成 "width:100%%"，浏览器视为非法值 → 表格宽度回退 auto →
+           # 内容被压扁成细条且不产生横向溢出，滚动条消失。2026-11-25 实测。
+           # 表格宽度：width:100%（随容器）+ min-width:620px（窄屏不被压扁、
+           # 外层 overflow-x:auto 产生横向溢出 → 可左右滑动）。
+           # ① 关键：**本串不走 % 格式化，百分号只能写单个 %**——写成 %% 会原样
+           #    输出成 "width:100%%"，浏览器视为非法值 → 表格宽度回退 auto →
+           #    内容被压扁成细条、无横向溢出、滚动条消失（2026-11-25 实测）。
+           # ② 微信 ProseMirror 会把 min-width 收敛成 100px、表格宽=容器宽，
+           #    但**列宽 width="%" 属性保留**——读者端因此是「表格随屏、列按
+           #    比例、长内容正常换行」，不会压扁（探针实证）。
+           '<table style="width:100%;min-width:620px;border-collapse:collapse;table-layout:fixed;font-size:13px;line-height:1.7;">']
     if col_widths and len(col_widths) == ncol:
         out.append('<colgroup>' + "".join('<col style="width:%d%%;">' % w for w in col_widths) + '</colgroup>')
     # 列宽三保险（2026-11-25 手机实测：微信 ProseMirror 编辑器按自家 schema
@@ -425,13 +478,93 @@ def resolve_theme(theme_key, scheme="light"):
     return t
 
 
+def _fence_flags(lines):
+    """标记哪些行位于 ``` 代码块内：代码注释里的 `# 1)` 不能当标题/引用。"""
+    flags, inside = [], False
+    for ln in lines:
+        if ln.strip().startswith("```"):
+            flags.append(True)
+            inside = not inside
+        else:
+            flags.append(inside)
+    return flags
+
+
+def _parse_title(lines, fence):
+    """优先用 Obsidian frontmatter 单独给出的 title；否则第一个 # 作标题。"""
+    for n, ln in enumerate(lines):
+        if not fence[n]:
+            m = TITLE_MARK.match(ln.strip())
+            if m:
+                return m.group(1).strip(), n
+    for n, ln in enumerate(lines):
+        if not fence[n] and ln.startswith("# "):
+            return ln[2:].strip(), n
+    return "", -1
+
+
+def _heading_levels(lines, fence, title_idx):
+    """正文里的一级/二级标题行号（标题行与代码块行已排除）。"""
+    h1, h2 = [], []
+    for n, ln in enumerate(lines):
+        if fence[n] or n == title_idx:
+            continue
+        if ln.startswith("# "):
+            h1.append(n)
+        elif ln.startswith("## "):
+            h2.append(n)
+    return h1, h2
+
+
+def collect_refs(lines, fence):
+    """全篇扫描超链接 → [(编号, 标题, URL)] 与 URL→编号 映射。
+       任何章节的 [文字](URL)/裸 URL/[N] 标题: URL 都收；重复 URL 复用编号。"""
+    refs, by_url, used = [], {}, set()
+
+    def add(num, label, url):
+        url = url.strip()
+        if url in by_url:
+            return by_url[url]
+        if num is None:
+            num = 1
+            while num in used:
+                num += 1
+        n = str(num)
+        used.add(num)
+        by_url[url] = n
+        refs.append((n, label.strip(), url))
+        return n
+
+    for n, ln in enumerate(lines):
+        if fence[n]:
+            continue
+        s = ln.strip()
+        if IMG_LINE.match(s):  # 插图 URL 不是 reference
+            continue
+        m = REF_LINE.match(s)
+        if m:
+            add(int(m.group(1)), m.group(2), m.group(3))
+            continue
+        for lm in MD_LINK.finditer(s):
+            add(None, lm.group(1), lm.group(2))
+        masked = MD_LINK.sub(lambda m: " " * len(m.group(0)), s)
+        for bm in BARE_URL.finditer(masked):
+            u = bm.group(0).rstrip(".,;:，。；)")
+            add(None, u, u)
+    return refs, by_url
+
+
 def convert(md, theme_key=DEFAULT_THEME, scheme="light"):
     t = resolve_theme(theme_key, scheme)
     lines = md.split("\n")
-    title = ""
-    for ln in lines:
-        if ln.startswith("# "):
-            title = ln[2:].strip(); break
+    fence = _fence_flags(lines)
+    title, title_idx = _parse_title(lines, fence)
+    refs, by_url = collect_refs(lines, fence)
+    t["_ref_urls"] = by_url
+    h1_idx, h2_idx = _heading_levels(lines, fence, title_idx)
+    # 有正文一级标题就用 # 分大章；只有一个标题 #（或无 #）就用 ## 分大章。
+    # Obsidian 的 title 来自 frontmatter 标记，正文的 # 1/# 2 全部是大章。
+    chapter_level = 1 if h1_idx else (2 if h2_idx else None)
     # 浅色方案根背景保持 #FFFFFF（历史成品与「正文零背景色」约定）；
     # 深色方案用主题深色 bg。
     root_bg = t["bg"] if scheme == "dark" else "#FFFFFF"
@@ -444,28 +577,23 @@ def convert(md, theme_key=DEFAULT_THEME, scheme="light"):
         s = ln.strip()
         if not s:
             i += 1; continue
-        if s.startswith("# "):
-            i += 1; continue  # 标题单独提取
-        # 取证来源附录：抓 [N] 标题: URL，正文不插超链接
-        if re.match(r"^##\s+附[：:]?\s*取证来源", s) or s == "## 附：取证来源":
-            i += 1; refs = []
-            while i < len(lines):
-                if not lines[i].strip():
-                    i += 1; continue  # 附录内空行跳过
-                m = re.match(r"^\[(\d+)\]\s*(.+?)[:：]\s*(https?://\S+)\s*$", lines[i].strip())
-                if m:
-                    refs.append((m.group(1), m.group(2), m.group(3))); i += 1; continue
-                # Markdown 链接列表 [标题](url) 也支持
-                # 无编号 Markdown 链接列表 [- [标题](url)] → 自动编号
-                m2 = re.match(r"^[-*]\s*\[([^\]]+)\]\((https?://[^)]+)\)\s*$", lines[i].strip())
-                if m2:
-                    refs.append((str(len(refs) + 1), m2.group(1), m2.group(2))); i += 1; continue
-                if lines[i].strip().startswith("#") or not lines[i].strip():
-                    break
-                i += 1
-            if refs:
-                body.append(appendix(refs, t))
-            continue
+        # 注意：不能在这里用 fence[i] 提前 continue——那会把 ``` 开围栏也跳过，
+        # 导致整段代码块丢失。代码块由下面的 ``` 分支一次性消费（2026-11-26 回归）。
+        if TITLE_MARK.match(s):  # frontmatter 标题行：取过就不再进正文
+            i += 1; continue
+        # 来源章节 heading 与来源条目在任意位置出现都跳过，统一在文末重排
+        if APPENDIX_HEAD.match(s) or REF_LINE.match(s) or REF_ITEM.match(s):
+            i += 1; continue
+        if s.startswith("# ") or s.startswith("## "):
+            level = 1 if s.startswith("# ") else 2
+            title_text = s[2:].strip() if level == 1 else s[3:].strip()
+            if level == chapter_level:
+                chapter_no += 1
+                body.append(number_chapter("%02d" % chapter_no, "CHAPTER",
+                                           title_text, t, first=(chapter_no == 1)))
+            else:
+                body.append(h3(title_text, t))
+            i += 1; continue
         if s.startswith("```"):
             lang = s[3:].strip() or "text"
             i += 1; buf = []
@@ -474,10 +602,6 @@ def convert(md, theme_key=DEFAULT_THEME, scheme="light"):
             i += 1
             body.append(code_block("\n".join(buf), lang, t=t))
             continue
-        if s.startswith("## "):
-            chapter_no += 1
-            body.append(number_chapter("%02d" % chapter_no, "CHAPTER", s[3:].strip(), t))
-            i += 1; continue
         if s.startswith("### "):
             body.append(h3(s[4:].strip(), t)); i += 1; continue
         if s.startswith(">"):
@@ -510,6 +634,8 @@ def convert(md, theme_key=DEFAULT_THEME, scheme="light"):
         if re.match(r"^(---+|\*\*\*+)$", s):
             i += 1; continue
         body.append(para(s, t)); i += 1
+    if refs:
+        body.append(appendix(refs, t))
     body.append("</section>")
     return title, "\n".join(body)
 

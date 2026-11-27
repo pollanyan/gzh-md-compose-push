@@ -1,6 +1,6 @@
 # 浏览器通道：Agent 自带工具的复用契约
 
-本文件回答一个问题：**扫码通道能不能不装 patchright，直接让 Agent 用它自己的浏览器工具做？** 能。Agent 的浏览器工具本身就是 skill / MCP 提供的接口，Agent 调接口操作浏览器；技能只需把公众号后台的精确操作写成一份与工具无关的契约，让 Agent 用当前宿主提供的接口去执行。
+本文件回答一个问题：**扫码通道能不能不装 patchright，直接让 Agent 用它自己的浏览器能力做？** 能。多数 Agent 是安装了 [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 才具备浏览器操作能力，也有宿主预装了别的等价工具、技能或插件；无论哪种，Agent 都是调接口操作浏览器。浏览器工具属于 Agent 侧能力，不属于本技能，也不绑定某个宿主：chrome-devtools 是独立开源项目，可装到多种 Agent 上。技能只要求能力满足契约，并把公众号后台的精确操作写成一份与工具无关的契约，让 Agent 用当前环境提供的接口去执行。
 
 ## 一、先探测当前 Agent 的浏览器工具
 
@@ -8,7 +8,7 @@
 
 | 宿主 / 工具                          | 调用方式                                      | 适合本契约                          |
 | ------------------------------------ | --------------------------------------------- | ----------------------------------- |
-| chrome-devtools MCP（如 WorkBuddy）  | MCP 工具：`new_page` / `navigate_page` / `take_snapshot` / `evaluate_script` / `click` / `press_key` / `upload_file` / `take_screenshot` | ✅ 最合适：能执行 JS、能上传文件、有独立持久化 profile |
+| chrome-devtools MCP / CLI（独立开源项目，多数 Agent 由此获得浏览器能力） | MCP 工具：`new_page` / `navigate_page` / `take_snapshot` / `evaluate_script` / `click` / `press_key` / `upload_file` / `take_screenshot` | ✅ 最合适：能执行 JS、能上传文件、有独立持久化 profile |
 | chrome-devtools-cli skill            | shell 命令：`chrome-devtools evaluate_script ...`、`upload_file`、`press_key` 等 | ✅ 与 MCP 等价，适合脚本化执行      |
 | computer-use 类工具                  | 截图 + 坐标点击 + 键盘                        | ⚠️ 可做，但慢且脆，**不要用坐标做正文注入** |
 | 无任何浏览器工具                     | —                                             | ❌ 退回技能自带 `mp_*.py`（patchright） |
@@ -32,7 +32,7 @@
 
 ### 0. 独立登录态
 
-用浏览器工具自带的**持久化 profile**，不要复用用户日常 Chrome 的登录态。chrome-devtools MCP 用它的默认持久 profile；脚本路径用 `scripts/mp_profile/`。两者互不影响。
+用浏览器工具自带的**持久化 profile**，不要复用用户日常 Chrome 的登录态。chrome-devtools MCP 用它的默认持久 profile；脚本路径用 `~/.config/gzh-md-compose-push/mp_profile/`。两者互不影响，也不会把 Cookies 放进技能目录。
 
 ### 1. 打开入口并取 token
 
@@ -73,7 +73,7 @@
 4. 轮询最多 8 秒，若出现「内容结构检测」弹窗（`.weui-desktop-dialog`），点「继续插入」——不点内容会被静默丢弃；
 5. 读 `.mock-iframe-body` 的 `innerText.length`，按 HTML 预期非空白字符数的 0.7 倍作下限（下限最小 20）；不达标则清空重试一次。
 
-**禁止**：合成 `ClipboardEvent('paste')`、`document.execCommand('insertHTML')`、直接改 `innerHTML`——公众号编辑器会丢弃。也**不要自己算坐标点击**：正文可高达数千像素，`scrollIntoView` 后坐标可能为负；用工具的 DOM 定位 / 选择器点击。
+**工具路径的实测修正（2026-11-26）**：chrome-devtools CLI 在无头/有头下 `press_key` 发 `Cmd+V` / `Ctrl+V` 都不触发原生粘贴（正文只剩 10 字占位符），即使 `navigator.clipboard.write` 返回成功。此时改用同一 `evaluate_script` 里的 `document.execCommand('selectAll')` + `document.execCommand('delete')` + `document.execCommand('insertHTML', false, html)`（先真实点击编辑器取得焦点），实测 24 万字符 HTML / 1 图 / 21458 字正文保存并重开核验通过。仍**禁止**合成 `ClipboardEvent('paste')` 和直接改 `innerHTML`；`insertHTML` 仅在工具路径的 evaluate_script 中作为备选，脚本路径继续走剪贴板。也**不要自己算坐标点击**：正文可高达数千像素，`scrollIntoView` 后坐标可能为负；用工具的 DOM 定位 / 选择器点击。
 
 ### 5. 正文配图
 
@@ -101,7 +101,7 @@
 
 ## 三、为什么这不是「自然语言随便驱动」
 
-「用 Agent 自带工具」不等于「说一句人话让 Agent 自由发挥」。上面每一步都是**确定的工具调用**：URL、选择器、JS、判据、禁止动作都写死了。Agent 的角色是把这些单元翻译成当前宿主的接口调用（chrome-devtools MCP 的 `evaluate_script` / `upload_file`，或 CLI 的同名命令，或 computer-use 的键盘 + 点击），而不是自己决定怎么操作公众号后台。这样同一份契约在不同 Agent 上执行结果一致。
+「用 Agent 的浏览器能力」不等于「说一句人话让 Agent 自由发挥」。上面每一步都是**确定的工具调用**：URL、选择器、JS、判据、禁止动作都写死了。Agent 的角色是把这些单元翻译成当前环境的接口调用（chrome-devtools MCP 的 `evaluate_script` / `upload_file`，或 CLI 的同名命令，或 computer-use 的键盘 + 点击），而不是自己决定怎么操作公众号后台。浏览器能力可能来自 chrome-devtools-mcp，也可能来自其他等价工具/插件，以能力而非来源为准；这样同一份契约在不同 Agent 上执行结果一致。
 
 脚本路径（`mp_*.py`）和工具路径执行的是**同一份契约**：脚本只是把上面的单元用 patchright 实现了一遍。所以「复用 Agent 自带工具」和「跑技能脚本」不是两套流程，是同一流程的两种执行器。
 
@@ -114,15 +114,15 @@ Agent 在运行时先探测宿主暴露的是 MCP 工具还是 shell 命令，�
                          CLI: chrome-devtools new_page "<url>"
 单元 3 读标题          → MCP: evaluate_script("(s)=>document.querySelector(s)?.innerText", selector)
                          CLI: chrome-devtools evaluate_script "(s)=>..." --args <uid>
-单元 4 写剪贴板 + 粘贴  → MCP: evaluate_script(写 ClipboardItem 的 JS, {html, plain})
-                         → MCP: press_key("Meta+V"（macOS）/"Control+V"）；再 evaluate_script 轮询「继续插入」
+单元 4 写剪贴板 + 粘贴  → 脚本路径：evaluate_script(写 ClipboardItem 的 JS) + press_key("Meta+V"/"Control+V")
+                         → 工具路径：先 click 编辑器，再 evaluate_script(execCommand selectAll/delete/insertHTML)
+                         → 若用剪贴板：evaluate_script 轮询「继续插入」
                          CLI: chrome-devtools evaluate_script "<JS>" --pageId <id>
-                              chrome-devtools press_key <id> "Meta+V"  # macOS；Windows/Linux 用 Control+V
 单元 7 设封面上传       → MCP: upload_file(uid, path) / 点击图片库条目
                          CLI: chrome-devtools upload_file <id> <uid> "<path>"
 单元 8 核验             → MCP: evaluate_script(读标题/正文长度/真图数/封面背景)
 ```
 
-computer-use 类工具只有截图 + 键盘 + 坐标点击：登录扫码、按钮点击、文件上传可用它，但**正文注入必须走 JS 写剪贴板**这条单元；若该工具不能执行 JS，就不满足契约条件，应改用 `mp_*.py`。
+computer-use 类工具只有截图 + 键盘 + 坐标点击：登录扫码、按钮点击、文件上传可用它，但**正文注入必须有能执行 JS 的工具**配合（写剪贴板或 insertHTML）；若该工具不能执行 JS，就不满足契约条件，应改用 `mp_*.py`。2026-11-26 实测：computer-use 的后台 `cmd+v` 在 Chrome 非前台时会被丢弃，工具路径不要依赖它注入正文。
 
 生成调用时保留契约给定的三个东西：URL / 选择器（或等价的 DOM 定位）、JS 片段、成功判据。自然语言只用来向用户收集选择（主题、封面路径、覆盖还是新建），不用来决定「怎么点公众号后台」。

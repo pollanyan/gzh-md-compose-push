@@ -6,17 +6,17 @@
 ## 认证与浏览器
 
 - 入口 URL 必须是 `https://mp.weixin.qq.com/`。直接开 `/cgi-bin/home`（无 `?token=`）会被判「请重新登录」，误以为 cookie 失效。
-- 独立 profile：`scripts/mp_profile/`（Cookies 在 `Default/Network/Cookies`）。与用户日常浏览器登录态不共享；与 WorkBuddy 是否登录无关。
+- 独立 profile：`~/.config/gzh-md-compose-push/mp_profile/`（Cookies 在 `Default/Network/Cookies`；`GZH_MP_RUNTIME` 可改根目录）。与用户日常浏览器登录态不共享；与宿主 Agent 是否登录无关，浏览器工具归属哪个 Agent 都不影响这份 profile。**不放技能目录**，避免安装副本/分享时带走登录态（2026-11-26 复查定稿）。
 - 登录态过期表现：脚本又去截二维码。`MP_LOGIN_WAIT` 默认 900 秒，登录成功立即返回。
-- 二维码约 4 分钟刷新一次；用户要扫的是放大版 `mp-login-qrcode-big.png`（~490px），原始 122px 扫不出。
-- profile 被占用（SingletonLock）→ 关残留 Chromium 进程或删 `mp_profile` 重新扫码。
-- `logout` = 删 `mp_profile`，分享技能前必做。
+- 二维码约 4 分钟刷新一次；用户要扫的是放大版 `~/.config/gzh-md-compose-push/mp-login-qrcode-big.png`（~490px），原始 122px 扫不出。
+- profile 被占用（SingletonLock）→ 关残留 Chromium 进程或删配置目录下的 `mp_profile` 重新扫码。
+- `logout` = 删配置目录下的 `mp_profile`；技能目录本身不应有登录态，无需分享前手工清理。
 
 ## 编辑器 DOM（2026 版）
 
 - 没有 iframe（老教程 `#ueditor_0` 已废弃）。正文 `.mock-iframe-body .ProseMirror`；标题 `.title-editor__input .ProseMirror`；署名 `input#author`；摘要 `textarea#js_description`。
 - 填 HTML 唯一可靠路径：真实点击聚焦 → `ctx.grant_permissions(['clipboard-read','clipboard-write'], origin='https://mp.weixin.qq.com')` → `navigator.clipboard.write` 写 `text/html` → `Cmd+V`（macOS）/ `Control+V`（Windows/Linux）。修饰键必须按平台选——2026-11-25 实测 mac 上 Control+V 不触发粘贴（注入只剩 10 字符），Control+A 也不全选。
-  无效做法：合成 `ClipboardEvent('paste')`、`document.execCommand('insertHTML')`、直接改 `innerHTML`。
+  无效做法：合成 `ClipboardEvent('paste')`、直接改 `innerHTML`。`execCommand('insertHTML')` 在 patchright 脚本路径实测无效，但 **chrome-devtools 工具路径的 evaluate_script 里实测有效**（2026-11-26，`press_key` 粘贴失效时的备选，需先真实点击编辑器聚焦）；见 `browser-tool-contract.md`。
 - 粘贴后可能弹「内容结构检测」，必须点「继续插入」，否则内容被静默丢弃（不是每次都弹，轮询 8 秒）。
 - 结构检测两条硬规则：文字背景禁渐变（CTA 用纯色）；`line-height` 不能小于 `font-size`（19px→1.45、17px→1.55、14/13px→1.6）。
 - 不要手算点击坐标（正文可高 5000+px，scrollIntoView 后 rect.y 为负）；用 `pg.click(selector)` 让 Playwright 算。
@@ -77,4 +77,46 @@
   列内最长单元格显示宽 ≤ 12 单位 → 整列 td `white-space:nowrap` + 列宽按
   「整格最大宽 + 8」保底。状态/评级/短枚举列自动覆盖，与表头名称无关
   （此前的「表头=状态」特例已废弃）。
+- **表格横向滚动的两条铁律**（2026-11-25 实战）：
+  - ①**table 的 style 里 `width:100%` 必须写单个 `%`**——该字符串若不走 Python
+    `%` 格式化，写成 `%%` 会原样输出成非法值 "width:100%%"，浏览器视为无效
+    → 表格宽度回退 auto → **内容被压扁成细条、无横向溢出、滚动条消失**
+    （本次事故真凶）。注意 `image_block` 那行**走了** `%` 格式化，那里 `%%`
+    是正确的，不要一起改。
+  - ②`width:100%` + `min-width:620px` 组合：窄屏下表格不小于 620px，外层
+    `overflow-x:auto` 产生横向溢出 → **可左右滑动**（浏览器实测 canScroll
+    true）。微信端会把 min-width 收敛、表格宽=容器宽，但**列的 width="%"
+    属性保留**，读者端因此是「表格随屏 + 列按比例 + 长内容正常换行」，
+    同样不压扁——微信不提供宽表格横滑，只能靠列宽比例让内容可读。
+- **代码块默认被微信强制折行 → 显式 nowrap + 外层 overflow-x:auto**
+  （2026-11-26 用户手机实测反馈）：微信编辑器把代码 `p` 的计算样式设为
+  `white-space:break-spaces`，长代码行被强行折行。修复：每个代码行 `p` 加
+  `white-space:nowrap`、外层代码块 section 加 `overflow-x:auto`——探针实证
+  微信 ProseMirror **两个声明都保留**（保存后 `outerOverflow=auto`、
+  `lineWs=nowrap`、行高 21px 单行），长行产生横向溢出可左右滑动。
+  浏览器窄容器实测：外层 scrollWidth 545 > clientWidth 316、canScroll true；
+  短代码块内容不超宽时无滚动条（正常）。注意用 nowrap 而非 `pre`（用户约定
+  禁用 pre），且每行单 leaf 的结构不变。
+- **一级标题被整行丢弃（Obsidian 多 # 大章稿）**（2026-11-26 用户反馈
+  「产物与原物结构不一致」）：转换器主循环原本把**所有** `# ` 行都跳过
+  （只取第一个作文章标题），源文的 `# 1 omp 是预置好的…` / `# 2 用扩展
+  定制 Pi` 两大章凭空消失。定稿修法：标题从 Obsidian frontmatter 单独取
+  （预处理写成 `<!-- gzh-title: ... -->`），正文 `#` 不再被当成标题吞掉；
+  章节级别按正文实际标题判定——有 `#` 用 `#`（01/02 大章节），否则用
+  `##`。代码块里的 `# 1) 备份…` 注释必须排除在标题扫描之外。
+- **reference 只认「附：取证来源」小节**（2026-11-26 用户指出太特殊化）：
+  正文章节标题里的 `[extensions](URL)` 之类链接会被预处理删成纯文字，URL
+  永久丢失。定稿：`collect_refs()` 全篇扫描 Markdown 链接/裸 URL/`[N]` 条目
+  统一编号，`_links_to_refs()` 在正文换成文字 + `[[N]]` 角标，文末重排附录；
+  重复 URL 复用编号，代码块与图片行不计入。
+- **代码块整段消失（2026-11-26 回归）**：标题改造时在 convert 主循环开头加了
+  `if not s or fence[i]: continue`，把 ``` 开围栏也跳过，代码块分支永远走不到，
+  于是 12 个代码块（含块嵌入的「可复制提示词」全文）全没了，草稿里表现为
+  「下面嵌入…全文，可整段复制使用：」后面空白。修法：主循环只用
+  `if not s: continue`，代码块由 ``` 分支一次性消费；fence 数组只用于预扫描标题
+  与 reference。交付前必须核对代码块数量与源稿围栏数一致（24 根围栏 = 12 块）。
+- **小标题与引用块双竖线很别扭**（2026-11-26 用户截图反馈）：h3 去掉
+  `border-left`；引用块改为浅灰底 `#F5F5F5` + `#D4D4D8` 左侧 2px 细线 +
+  `#3F3F3F` 字（深色方案 `#383838`/`#A1A1AA`/`#A5A5A5`），照用户提供的
+  其他公众号深浅截图定稿；深浅自适应预览仍由微信读者端算法转换。
 - 旧版用魔数 `正文长度<=200` 判注入失败，导致短文被重复粘贴。现按预期非空白字符数判定（下限=预期×0.7），每次尝试前先 `Ctrl+A`+`Delete` 清空。
