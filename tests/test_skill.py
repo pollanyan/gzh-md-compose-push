@@ -364,6 +364,7 @@ class RepoHygieneTests(unittest.TestCase):
         for d in ("scripts", "references", "templates", "assets", "doc"):
             self.assertTrue(os.path.isdir(os.path.join(ROOT, d)), d)
         self.assertTrue(re.search(r"^name:\s*gzh-md-compose-push\b", self.skill_md, re.M))
+        self.assertIn("display_name: 公众号排版与发布助手(Obsidian/Markdown)", self.skill_md)
         themes = [f for f in os.listdir(os.path.join(ROOT, "assets"))
                   if f.endswith(".png")]
         self.assertEqual(len(themes), 12)

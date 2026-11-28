@@ -1,6 +1,6 @@
 ---
 name: gzh-md-compose-push
-display_name: 公众号 Markdown 排版推送
+display_name: 公众号排版与发布助手(Obsidian/Markdown)
 display_name_en: GZH Markdown Compose & Push
 description: "把 Markdown 与 Obsidian 笔记排版成公众号 HTML，并推送到公众号草稿箱：6 套主题（深浅两版）、本地与网络图片上传、代码高亮、Obsidian Callout 渲染。默认微信扫码免 AppID，可选官方 API（需 AppID/AppSecret）；排版方案→本地预览→推送草稿箱三段确认，全程可控。只写草稿，绝不代发布。"
 description_zh: "把 Markdown 与 Obsidian 笔记排版成公众号 HTML，并推送到公众号草稿箱：6 套主题（深浅两版）、本地与网络图片上传、代码高亮、Obsidian Callout 渲染。默认微信扫码免 AppID，可选官方 API（需 AppID/AppSecret）；排版方案→本地预览→推送草稿箱三段确认，全程可控。只写草稿，绝不代发布。"
@@ -14,12 +14,12 @@ examples_en:
   - "Format this Obsidian note into a WeChat article and show me a graphite-minimal preview first"
   - "Overwrite the existing WeChat draft with my revised article"
 author: 严宝亮
-version: 1.0.0
+version: 1.0.1
 license: MIT
 agent_created: true
 ---
 
-# 公众号 Markdown 排版推送（扫码 + API 双通道）
+# 公众号排版与发布助手(Obsidian/Markdown)（扫码 + API 双通道）
 
 ## 目的与边界
 
