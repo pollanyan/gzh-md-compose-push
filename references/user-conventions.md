@@ -121,6 +121,16 @@ https://github.com/...
   （`color:inherit` 自适配 + 第 7 套 adaptive 主题）。事实：`inherit`/`currentColor`/
   `transparent` 等**关键字**确实不参与转换、且继承色跟随落点容器（编辑器里就会白字），
   但 **HEX 内联样式会被算法正常转换**。判断平台能力必须先查官方文档，不许凭推断下结论。
+- **图片例外 / 公众号无法按系统深浅自动换图**（2026-11-28 实测，勿再走弯路）：
+  上面的自动转换**只作用于 DOM 文本与背景色，不包括位图**——图片不参与算法、也不做
+  内容识别。实测公众号正文会剥离 `<picture><source media="(prefers-color-scheme: dark)">`
+  中的 `<source>`（只留浅色 `<img>`），也会剥离 `<img>` 上的 `data-darkmode-src` /
+  `data-no-dark`（编辑器把图片重构成 `<section nodeleaf><img src data-src style>`）；
+  只有 `<p>` / `<span>` 等文本节点上的 `data-no-dark` 会保留。README 主题效果图那种
+  「跟随系统深浅自动切换」靠的是 **GitHub 文档页原生支持 `<picture>`**，公众号正文
+  没有这个能力。要在文章里同时展示深浅两版，只能把两版**并列画进同一张位图**
+  （如上下各一版、各带标签），由读者自己对照，不要指望按读者系统模式自动换图。
+  若不确定平台是否支持某项 HTML，先推一篇测试草稿回读 DOM 取证，再下结论。
 - 主题颜色规范（= 官方最佳实践）：HEX 格式（颜色名称 black/white 不参与转换）；
   对比度适中；不用文字背景渐变；背景写在容器上；不用 `!important`。
 - 深色预览：`scripts/wechat_dark.py` 是官方算法的静态移植（阈值与官方一致）。

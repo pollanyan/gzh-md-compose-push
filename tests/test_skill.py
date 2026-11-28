@@ -504,6 +504,30 @@ class RepoHygieneTests(unittest.TestCase):
         # profile 占用先走预检脚本，不再只写手动删 profile
         self.assertIn("mp_preflight.py --fix", notes)
 
+    def test_darkmode_image_exception_documented(self):
+        """2026-11-28 实测：图片不参与深色转换、公众号无法自动换图；三处文档须口径一致。"""
+        conv = read(os.path.join(ROOT, "references/user-conventions.md"))
+        notes = read(os.path.join(ROOT, "references/mp-wechat-notes.md"))
+        # 用户约定：图片例外 + 并列画进同一张图的做法
+        self.assertIn("图片例外", conv)
+        self.assertIn("位图", conv)
+        self.assertIn("并列画进同一张位图", conv)
+        # 踩坑清单：source 剥离 + data-darkmode-src 剥离 +  GitHub 不可照搬
+        self.assertIn("sourceCount=0", notes)
+        self.assertIn("data-darkmode-src", notes)
+        self.assertIn("不可照搬到公众号正文", notes)
+        # README：FAQ 与配色两处都要点明图片例外，且不得退回「图片也会自动适配」的笼统说法
+        self.assertIn("正文里的图片不会跟着变", self.readme)
+        self.assertIn("只作用于文字和背景，不含正文图片", self.readme)
+        self.assertIn("公众号正文不支持按系统自动换图", self.readme)
+
+    def test_scroll_snap_finding_documented(self):
+        """2026-11-28 实测：scroll-snap 在公众号保留、探测横滑要向上遍历祖先。"""
+        notes = read(os.path.join(ROOT, "references/mp-wechat-notes.md"))
+        self.assertIn("scroll-snap-type:x mandatory", notes)
+        self.assertIn("向上遍历", notes)
+        self.assertIn("clientW=558", notes)
+
     def test_config_and_image_upload_paths(self):
         cfg = read(os.path.join(SCRIPTS, "push_config.py"))
         self.assertIn("GZH_PUSH_CONFIG", cfg)

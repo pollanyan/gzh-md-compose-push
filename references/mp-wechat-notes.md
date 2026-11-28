@@ -39,10 +39,26 @@
 - 缩略图是 `/300?wx_fmt=png`，换成 `/0?` 是原图；粘贴后微信改写为 `/640?` 并加 `class="rich_pages wxw-img"` 属正常。
 - 每张正文图后面 ProseMirror 插一个 `<img class="ProseMirror-separator" src="">`；数图/删图必须排除它，6 张图的 `img` 总数是 12。
 - 图片库是账号级的，同名图不会新增；重复上传会造成多份。
+- **位图不参与 Dark Mode 转换，也无法按系统深浅自动换图**（2026-11-28 实测）：
+  正文里 `<picture><source media="(prefers-color-scheme: dark)">` 的 `<source>`
+  会被整条剥离（`pictureCount=1` 但 `sourceCount=0`，只剩浅色 `<img>`）；`<img>`
+  上的 `data-darkmode-src` / `data-no-dark` 同样被剥离（编辑器把图片重构成
+  `<section nodeleaf><img src data-src style>`）；但 `<p>` / `<span>` 等文本节点上的
+  `data-no-dark` 会保留。GitHub README 的效果图自动切换靠 GitHub 原生支持
+  `<picture>`，**不可照搬到公众号正文**。要同时展示深浅两版，只能把两版并列画进
+  同一张位图（上下各一版、各带标签）让读者对照。拿不准平台是否支持某 HTML，
+  先推一篇测试草稿回读 DOM 取证（测完用 `mp_drafts.py delete` 清理）。
 
 ## 核验
 
 - `mp_check.py <appmsgid> [预期图数]`：退出后重开草稿核对，输出 PASS/FAIL。检查 title/author/digest 有值、bodyLen>20、realImgs==正文图数、封面非默认、原图尺寸。
+- **横滑容器实测保留 `scroll-snap-type:x mandatory`**（2026-11-28）：`overflow-x:auto`
+  + `scroll-snap-type:x mandatory` + 子图 `display:inline-block;width:100%` 保存后
+  全部保留，`clientW=558` / `scrollW=3348`（一屏一张 ×6），吸附切换在微信端真实生效。
+  探测时 `img.parentElement` 只是 ProseMirror 补的 `<span>`（`overflow=visible` /
+  `clientW=0`），**真正的滚动容器在更上层 `section`**——从 img 沿 `parentElement`
+  向上遍历、找 `getComputedStyle(e).overflowX==='auto'` 的祖先才是，别直接取父元素，
+  否则会误判成「横滑丢失」。
 - 草稿打不开三种形态：`系统错误(320003)` 草稿不存在、`此草稿已被删除`、`此草稿已发表`——不是选择器失效。
 
 ## 覆盖草稿
